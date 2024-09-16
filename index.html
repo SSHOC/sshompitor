@@ -3,53 +3,51 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>API Data Visualization</title>
+    <title>API Hits Visualization</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <h1>API Data Over Time</h1>
-    <canvas id="apiDataChart" width="400" height="200"></canvas>
+    <h1>API Hits Count Over Time</h1>
+    <canvas id="hitsChart" width="400" height="200"></canvas>
 
     <script>
         // Define the repository and path to the JSON files
         const repoURL = 'https://raw.githubusercontent.com/<username>/<repository>/main/data/';
 
-        // Fetch a list of JSON files in the 'data' directory
-        async function fetchAPIData() {
-            const response = await fetch(repoURL + 'index.json'); // Optional: index.json can list all the files
-            const dataFiles = await response.json(); // Assuming index.json lists all file names
+        // Function to fetch the list of JSON files and extract hits data
+        async function fetchHitsData() {
+            // Placeholder for hit counts and timestamps
+            const hitsData = [];
+            const timestamps = [];
 
-            const timeSeriesData = [];
-            const timeLabels = [];
+            // Hardcoded file names - alternatively, you could have an index.json file to list all files
+            const fileNames = ['hits_1632345600.json', 'hits_1632359200.json']; // Replace with dynamic file names
 
-            // Loop through each JSON file and extract data
-            for (let file of dataFiles) {
-                const fileResponse = await fetch(repoURL + file);
-                const apiData = await fileResponse.json();
-
-                // Example: Get the 'item_count' from the API response
-                const itemCount = apiData.items.length;  // Adjust based on your API structure
-                const timestamp = new Date(parseInt(file.split('_')[2].split('.')[0]) * 1000);  // Extract timestamp from filename
-
-                timeSeriesData.push(itemCount);
-                timeLabels.push(timestamp.toLocaleString());
+            for (let file of fileNames) {
+                const response = await fetch(repoURL + file);
+                const fileData = await response.json();
+                
+                // Extract the hits count and timestamp from the file
+                hitsData.push(fileData.hits);
+                const date = new Date(fileData.timestamp * 1000);  // Convert Unix timestamp to date
+                timestamps.push(date.toLocaleString());
             }
 
-            return { timeSeriesData, timeLabels };
+            return { hitsData, timestamps };
         }
 
         // Function to create the chart
         async function createChart() {
-            const { timeSeriesData, timeLabels } = await fetchAPIData();
+            const { hitsData, timestamps } = await fetchHitsData();
 
-            const ctx = document.getElementById('apiDataChart').getContext('2d');
-            const apiDataChart = new Chart(ctx, {
+            const ctx = document.getElementById('hitsChart').getContext('2d');
+            const hitsChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: timeLabels,  // Timestamps
+                    labels: timestamps,  // Timestamps for the X-axis
                     datasets: [{
-                        label: '# of Items Over Time',
-                        data: timeSeriesData,  // Data points from the API
+                        label: 'Hits Count Over Time',
+                        data: hitsData,  // Hit counts for the Y-axis
                         borderColor: 'rgba(75, 192, 192, 1)',
                         borderWidth: 2
                     }]
@@ -64,7 +62,7 @@
             });
         }
 
-        // Load the chart when the page loads
+        // Call the function to create the chart when the page loads
         createChart();
     </script>
 </body>
