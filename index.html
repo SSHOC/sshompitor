@@ -14,22 +14,24 @@
         // Define the repository and path to the JSON files
         const repoURL = 'https://raw.githubusercontent.com/mkrzmr/sshompitor/main/data/';
 
-        // Function to fetch the list of JSON files and extract hits data
+
+        // Fetch the index.json file that contains the list of all data files
         async function fetchHitsData() {
-            // Placeholder for hit counts and timestamps
+            // Fetch the list of JSON files from index.json
+            const response = await fetch(repoURL + 'index.json');
+            const fileNames = await response.json();  // Array of JSON filenames
+
             const hitsData = [];
             const timestamps = [];
 
-            // Hardcoded file names - alternatively, you could have an index.json file to list all files
-            const fileNames = ['hits_1632345600.json', 'hits_1632359200.json']; // Replace with dynamic file names
-
+            // Loop through each file and extract hits data and timestamp
             for (let file of fileNames) {
-                const response = await fetch(repoURL + file);
-                const fileData = await response.json();
+                const fileResponse = await fetch(repoURL + file);
+                const fileData = await fileResponse.json();
                 
-                // Extract the hits count and timestamp from the file
+                // Extract the hits count and timestamp from each JSON file
                 hitsData.push(fileData.hits);
-                const date = new Date(fileData.timestamp * 1000);  // Convert Unix timestamp to date
+                const date = new Date(fileData.timestamp * 1000);  // Convert Unix timestamp to a readable date
                 timestamps.push(date.toLocaleString());
             }
 
@@ -47,7 +49,7 @@
                     labels: timestamps,  // Timestamps for the X-axis
                     datasets: [{
                         label: 'Hits Count Over Time',
-                        data: hitsData,  // Hit counts for the Y-axis
+                        data: hitsData,  // Hits count for the Y-axis
                         borderColor: 'rgba(75, 192, 192, 1)',
                         borderWidth: 2
                     }]
