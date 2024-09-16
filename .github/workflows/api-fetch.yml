@@ -18,7 +18,7 @@ jobs:
       - name: Query API and extract hits count
         run: |
           # Query the API using curl and parse the hits count using jq
-          HITS=$(curl -s https://api.example.com/items | jq '.hits')
+          HITS=$(curl -s https://marketplace-api.sshopencloud.eu/api/item-search?categories=&advanced=false&includeSteps=false | jq '.hits')
           
           # Create a 'data' directory if it doesn't exist
           mkdir -p data
