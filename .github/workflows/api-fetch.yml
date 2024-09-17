@@ -19,42 +19,35 @@ jobs:
         run: |
           # Query the API using curl and parse the hits count using jq
           HITS=$(curl -s https://marketplace-api.sshopencloud.eu/api/item-search?categories=&advanced=false&includeSteps=false | jq '.hits')
-          
-          # Create a 'data' directory if it doesn't exist
-          mkdir -p data
-          
-          # Save the hits count with a timestamp in a JSON file
-          echo "{\"timestamp\": \"$(date +%s)\", \"hits\": $HITS}" > data/hits_$(date +%s).json
+          mkdir -p $GITHUB_WORKSPACE/data
+          echo "{\"timestamp\": \"$(date +%s)\", \"hits\": $HITS}" > $GITHUB_WORKSPACE/data/hits_$(date +%s).json
 
-      # Step 3: Commit and push the new data to the repository
       - name: Commit and push data
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Add the new file to the repository
-          git add data/*.json
-          
-          # Commit the new data with a message
-          git commit -m "Add new hits count at $(date)"
+
+          git add $GITHUB_WORKSPACE/data/*.json
+          git commit -m "Add new hits count at $(date)" || exit 0  # Exit if no changes to commit
           
           # Use the Personal Access Token for authentication
           git push https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git
       - name: Ensure data directory exists
         run: |
-          mkdir -p data
+          mkdir -p $GITHUB_WORKSPACE/data
 
-      - name: Check JSON files exist before generating index.json
+      - name: Print working directory
         run: |
-          echo "Files in 'data/' directory:"
-          ls data/
+          pwd
+          echo "Files in the current directory:"
+          ls -la
 
-      - name: Adjust permissions on data directory
+      - name: Check if JSON files exist
         run: |
-          chmod -R 777 data
-          ls -l data/
+          echo "Listing the files in 'data/' directory:"
+          ls -la $GITHUB_WORKSPACE/data/
 
-      - name: Generate index.json
+      - name: Generate index.json with absolute path
         run: |
-          ls data/*.json > data/index.json
-          cat data/index.json  # Output index.json to verify
+          ls $GITHUB_WORKSPACE/data/*.json > $GITHUB_WORKSPACE/data/index.json
+          cat $GITHUB_WORKSPACE/data/index.json  # Output index.json to verify
