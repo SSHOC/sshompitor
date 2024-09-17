@@ -53,7 +53,16 @@ jobs:
           echo "Listing the files in 'data/' directory:"
           ls -la $GITHUB_WORKSPACE/data/
 
-      - name: Generate index.json with absolute path
+      - name: Generate index.json with filenames
         run: |
-          ls $GITHUB_WORKSPACE/data/*.json > $GITHUB_WORKSPACE/data/index.json
-          cat $GITHUB_WORKSPACE/data/index.json  # Output index.json to verify
+          echo "[" > $GITHUB_WORKSPACE/data/index.json
+          for file in $GITHUB_WORKSPACE/data/*.json; do
+            echo "\"$(basename $file)\"," >> $GITHUB_WORKSPACE/data/index.json
+          done
+          # Remove the trailing comma and close the JSON array
+          sed -i '$ s/,$//' $GITHUB_WORKSPACE/data/index.json
+          echo "]" >> $GITHUB_WORKSPACE/data/index.json
+          
+          # Output the contents of index.json to verify
+          cat $GITHUB_WORKSPACE/data/index.json
+
