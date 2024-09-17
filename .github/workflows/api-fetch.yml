@@ -2,34 +2,39 @@ name: Fetch API Hits Count
 
 on:
   schedule:
-    # Run the job every 30 minutes
-    - cron: "*/30 * * * *"
+    - cron: "*/30 * * * *"  # Run every 30 minutes
 
 jobs:
   fetch_api_hits:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout the repository to commit the data later
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Step 2: Query the API and extract the "hits" count
-      - name: Query API and extract hits count
+      - name: Query API and extract timestamp and hits
         run: |
-          # Query the API using curl and parse the hits count using jq
-          HITS=$(curl -s https://marketplace-api.sshopencloud.eu/api/item-search?categories=&advanced=false&includeSteps=false | jq '.hits')
+          # Query the API
+          RESPONSE=$(curl -s https://marketplace-api.sshopencloud.eu/api/item-search?categories=&advanced=false&includeSteps=false)
+
+          # Extract the timestamp and hits using jq
+          TIMESTAMP=$(echo $RESPONSE | jq -r '.timestamp')
+          HITS=$(echo $RESPONSE | jq -r '.hits.hits')
+
+          # Create a directory for storing data
           mkdir -p $GITHUB_WORKSPACE/data
-          echo "{\"timestamp\": \"$(date +%s)\", \"hits\": $HITS}" > $GITHUB_WORKSPACE/data/hits_$(date +%s).json
+
+          # Save the result in the format {timestamp: hits}
+          echo "{\"$TIMESTAMP\": $HITS}" > $GITHUB_WORKSPACE/data/hits_$TIMESTAMP.json
 
       - name: Commit and push data
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
+
           # Pull the latest changes from the remote
           git pull --rebase https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
-          
+
           # Add the new file(s) to the repository
           git add $GITHUB_WORKSPACE/data/*.json
 
@@ -38,31 +43,3 @@ jobs:
 
           # Push the changes to the remote repository
           git push https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
-      - name: Ensure data directory exists
-        run: |
-          mkdir -p $GITHUB_WORKSPACE/data
-
-      - name: Print working directory
-        run: |
-          pwd
-          echo "Files in the current directory:"
-          ls -la
-
-      - name: Check if JSON files exist
-        run: |
-          echo "Listing the files in 'data/' directory:"
-          ls -la $GITHUB_WORKSPACE/data/
-
-      - name: Generate index.json with filenames
-        run: |
-          echo "[" > $GITHUB_WORKSPACE/data/index.json
-          for file in $GITHUB_WORKSPACE/data/*.json; do
-            echo "\"$(basename $file)\"," >> $GITHUB_WORKSPACE/data/index.json
-          done
-          # Remove the trailing comma and close the JSON array
-          sed -i '$ s/,$//' $GITHUB_WORKSPACE/data/index.json
-          echo "]" >> $GITHUB_WORKSPACE/data/index.json
-          
-          # Output the contents of index.json to verify
-          cat $GITHUB_WORKSPACE/data/index.json
-
