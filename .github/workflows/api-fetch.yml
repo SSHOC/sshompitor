@@ -38,8 +38,8 @@ jobs:
           # Commit the new data with a message
           git commit -m "Add new hits count at $(date)"
           
-          # Push the commit to the repository
-          git push
+          # Use the Personal Access Token for authentication
+          git push https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git
           # Generate an index.json file that lists all JSON files in the 'data/' directory
       - name: Generate index.json
         run: |
