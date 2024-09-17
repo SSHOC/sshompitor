@@ -41,6 +41,17 @@ jobs:
           # Use the Personal Access Token for authentication
           git push https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git
           # Generate an index.json file that lists all JSON files in the 'data/' directory
+      - name: Ensure data directory exists
+        run: |
+          mkdir -p data
+
+      - name: List JSON files in data directory
+        run: |
+          echo "Checking for .json files in the 'data/' directory:"
+          ls data/ || echo "No files found in 'data/' directory"
+
       - name: Generate index.json
         run: |
-          ls data/*.json | jq -R -s -c 'split("\n")[:-1]' > data/index.json
+          ls data/*.json > temp.txt  # List all .json files into a temp file
+          jq -R -s -c 'split("\n")[:-1]' < temp.txt > data/index.json  # Generate the index.json file
+          cat data/index.json  # Output index.json to verify
