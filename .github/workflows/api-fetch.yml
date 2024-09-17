@@ -12,7 +12,7 @@ jobs:
     steps:
       # Step 1: Checkout the repository to commit the data later
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       # Step 2: Query the API and extract the "hits" count
       - name: Query API and extract hits count
@@ -40,18 +40,21 @@ jobs:
           
           # Use the Personal Access Token for authentication
           git push https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git
-          # Generate an index.json file that lists all JSON files in the 'data/' directory
       - name: Ensure data directory exists
         run: |
           mkdir -p data
 
-      - name: List JSON files in data directory
+      - name: Check JSON files exist before generating index.json
         run: |
-          echo "Checking for .json files in the 'data/' directory:"
-          ls data/ || echo "No files found in 'data/' directory"
+          echo "Files in 'data/' directory:"
+          ls data/
+
+      - name: Adjust permissions on data directory
+        run: |
+          chmod -R 777 data
+          ls -l data/
 
       - name: Generate index.json
         run: |
-          ls data/*.json > temp.txt  # List all .json files into a temp file
-          jq -R -s -c 'split("\n")[:-1]' < temp.txt > data/index.json  # Generate the index.json file
+          ls data/*.json > data/index.json
           cat data/index.json  # Output index.json to verify
