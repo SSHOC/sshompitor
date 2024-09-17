@@ -26,16 +26,18 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
+          
           # Pull the latest changes from the remote
           git pull --rebase https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
-
-            
-          git add $GITHUB_WORKSPACE/data/*.json
-          git commit -m "Add new hits count at $(date)" || exit 0  # Exit if no changes to commit
           
-          # Use the Personal Access Token for authentication
-          git push https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git
+          # Add the new file(s) to the repository
+          git add $GITHUB_WORKSPACE/data/*.json
+
+          # Commit the new data with a message
+          git commit -m "Add new hits count at $(date)" || exit 0  # No commit if no changes
+
+          # Push the changes to the remote repository
+          git push https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
       - name: Ensure data directory exists
         run: |
           mkdir -p $GITHUB_WORKSPACE/data
