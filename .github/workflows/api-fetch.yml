@@ -14,11 +14,13 @@ jobs:
 
       - name: Query API and extract timestamp and hits
         run: |
+          # Generate the current timestamp (Unix time in seconds)
+          TIMESTAMP=$(date +%s)
+          
           # Query the API
           RESPONSE=$(curl -s https://marketplace-api.sshopencloud.eu/api/item-search?categories=&advanced=false&includeSteps=false )
 
-          # Extract the timestamp and hits using jq
-          TIMESTAMP=$(echo $RESPONSE | jq -r '.timestamp')
+          # Extract the hits using jq
           HITS=$(echo $RESPONSE | jq -r '.hits')
 
           # Create a directory for storing data
