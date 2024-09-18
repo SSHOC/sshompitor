@@ -73,12 +73,13 @@
                         x: {
                             type: 'time',
                             time: {
-                                unit: 'minute',
+                                unit: 'day',  // Adjust the time unit to 'day'
+                                stepSize: 1,  // Step size of 1 day
                                 tooltipFormat: 'PPpp'  // Date format for tooltips
                             },
                             title: {
                                 display: true,
-                                text: 'Time'
+                                text: 'Date'
                             }
                         },
                         y: {
