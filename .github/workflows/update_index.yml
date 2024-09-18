@@ -27,8 +27,7 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Pull the latest changes from the remote
-          git pull --rebase https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
+          # Pull the latest changes from the remote  git pull --rebase https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
 
           git add data/index.json
           git commit -m "Update index.json"
