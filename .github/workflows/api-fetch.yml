@@ -15,7 +15,7 @@ jobs:
       - name: Query API and extract timestamp and hits
         run: |
           # Query the API
-          RESPONSE=$(curl -s https://marketplace-api.sshopencloud.eu/api/item-search?categories=&advanced=false&includeSteps=false)
+          RESPONSE=$(curl -s https://marketplace-api.sshopencloud.eu/api/item-search?categories=&advanced=false&includeSteps=false )
 
           # Extract the timestamp and hits using jq
           TIMESTAMP=$(echo $RESPONSE | jq -r '.timestamp')
