@@ -1,0 +1,34 @@
+name: Update Index JSON
+
+on:
+  push:
+    paths:
+      - 'data/*.json'
+  schedule:
+    - cron: '*/30 * * * *'  # Run every 30 minutes
+
+jobs:
+  update-index:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Step 2: Generate index.json by listing all JSON files in the 'data/' directory
+      - name: Generate index.json
+        run: |
+          ls data/*.json | jq -R -s -c 'split("\n")[:-1]' > data/index.json
+          
+      # Step 3: Commit and push the updated index.json back to the repository
+      - name: Commit and push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add data/index.json
+          git commit -m "Update index.json"
+          
+          # Push using the GitHub token
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
