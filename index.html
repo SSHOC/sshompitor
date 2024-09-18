@@ -8,8 +8,11 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
-    <!-- Chart.js Moment.js adapter for handling time scales -->
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment"></script>
+    <!-- Chart.js adapter for date-fns to handle time scales -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    
+    <!-- date-fns for date formatting -->
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@2.28.0/dist/date-fns.min.js"></script>
 
 </head>
 <body>
@@ -56,7 +59,7 @@
             const chart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: data.map(d => new Date(d.timestamp * 1000).toLocaleString()), // Convert timestamp to human-readable date
+                    labels: data.map(d => new Date(d.timestamp * 1000)), // Use Date object for timestamps
                     datasets: [{
                         label: 'Number of Hits',
                         data: data.map(d => d.hits),
@@ -70,7 +73,8 @@
                         x: {
                             type: 'time',
                             time: {
-                                unit: 'minute'
+                                unit: 'minute',
+                                tooltipFormat: 'PPpp'  // Date format for tooltips
                             },
                             title: {
                                 display: true,
