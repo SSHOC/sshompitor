@@ -11,31 +11,31 @@
     <canvas id="hitsChart" width="800" height="400"></canvas>
 
     <script>
+        // Fetch a single JSON file
         async function fetchJSON(file) {
-            try {
-                const response = await fetch(file);
-                if (!response.ok) throw new Error("File not found");
-                return await response.json();
-            } catch (error) {
-                console.error(`Error fetching ${file}:`, error);
+            const response = await fetch(file);
+            if (!response.ok) {
+                console.error("Error fetching " + file);
                 return null;
             }
+            return await response.json();
         }
 
+        // Fetch the index.json to get a list of all available .json files
         async function fetchAllData() {
+            const indexResponse = await fetch('data/index.json');
+            const files = await indexResponse.json(); // This gives the array of .json file names
+            
             const hitsData = [];
-            let timestamp = Math.floor(Date.now() / 1000); // Start with the current Unix timestamp
-            let attempts = 100; // Try for the last 100 files (adjust as needed)
-
-            for (let i = 0; i < attempts; i++) {
-                // Adjust the file path to include the repository name
-                const file = `/sshompitor/data/hits_${timestamp - i * 1800}.json`;  // Assuming 30-minute intervals
-                const data = await fetchJSON(file);
+            
+            for (const file of files) {
+                const data = await fetchJSON('data/' + file);
                 if (data) {
-                    const timestampKey = Object.keys(data)[0];
-                    const hits = data[timestampKey];
+                    const timestamp = Object.keys(data)[0];  // Extract timestamp (key)
+                    const hits = data[timestamp];  // Extract hits (value)
+                    
                     hitsData.push({
-                        timestamp: parseInt(timestampKey),
+                        timestamp: parseInt(timestamp),
                         hits: hits
                     });
                 }
@@ -44,6 +44,7 @@
             return hitsData;
         }
 
+        // Render the chart using Chart.js
         function renderChart(data) {
             const ctx = document.getElementById('hitsChart').getContext('2d');
             const chart = new Chart(ctx, {
