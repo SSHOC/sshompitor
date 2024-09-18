@@ -29,7 +29,7 @@
             const hitsData = [];
             
             for (const file of files) {
-                const data = await fetchJSON('data/' + file);
+                const data = await fetchJSON(file);
                 if (data) {
                     const timestamp = Object.keys(data)[0];  // Extract timestamp (key)
                     const hits = data[timestamp];  // Extract hits (value)
