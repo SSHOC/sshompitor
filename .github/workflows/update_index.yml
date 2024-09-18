@@ -31,4 +31,4 @@ jobs:
           git commit -m "Update index.json"
           
           # Push using the GitHub token
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/mkrzmr/sshompitor.git main
