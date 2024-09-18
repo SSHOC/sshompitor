@@ -28,7 +28,8 @@
             let attempts = 100; // Try for the last 100 files (adjust as needed)
 
             for (let i = 0; i < attempts; i++) {
-                const file = `data/hits_${timestamp - i * 1800}.json`;  // Assuming 30-minute intervals (1800 seconds)
+                // Adjust the file path to include the repository name
+                const file = `/sshompitor/data/hits_${timestamp - i * 1800}.json`;  // Assuming 30-minute intervals
                 const data = await fetchJSON(file);
                 if (data) {
                     const timestampKey = Object.keys(data)[0];
