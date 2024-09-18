@@ -3,69 +3,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>API Hits Visualization</title>
+    <title>Hits Over Time</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <h1>API Hits Count Over Time</h1>
-    <canvas id="hitsChart" width="400" height="200"></canvas>
+    <h1>Number of Items (Hits) Over Time</h1>
+    <canvas id="hitsChart" width="800" height="400"></canvas>
 
     <script>
-        // Define the repository and path to the JSON files
-        const repoURL = 'https://raw.githubusercontent.com/mkrzmr/sshompitor/main/data/';
-
-
-        // Fetch the index.json file that contains the list of all data files
-        async function fetchHitsData() {
-            // Fetch the list of JSON files from index.json
-            const response = await fetch(repoURL + 'index.json');
-            const fileNames = await response.json();  // Array of JSON filenames
-
-            const hitsData = [];
-            const timestamps = [];
-
-            // Loop through each file and extract hits data and timestamp
-            for (let file of fileNames) {
-                const fileResponse = await fetch(repoURL + file);
-                const fileData = await fileResponse.json();
-                
-                // Extract the hits count and timestamp from each JSON file
-                hitsData.push(fileData.hits);
-                const date = new Date(fileData.timestamp * 1000);  // Convert Unix timestamp to a readable date
-                timestamps.push(date.toLocaleString());
+        async function fetchJSON(file) {
+            try {
+                const response = await fetch(file);
+                if (!response.ok) throw new Error("File not found");
+                return await response.json();
+            } catch (error) {
+                console.error(`Error fetching ${file}:`, error);
+                return null;
             }
-
-            return { hitsData, timestamps };
         }
 
-        // Function to create the chart
-        async function createChart() {
-            const { hitsData, timestamps } = await fetchHitsData();
+        async function fetchAllData() {
+            const hitsData = [];
+            let timestamp = Math.floor(Date.now() / 1000); // Start with the current Unix timestamp
+            let attempts = 100; // Try for the last 100 files (adjust as needed)
 
+            for (let i = 0; i < attempts; i++) {
+                const file = `data/hits_${timestamp - i * 1800}.json`;  // Assuming 30-minute intervals (1800 seconds)
+                const data = await fetchJSON(file);
+                if (data) {
+                    const timestampKey = Object.keys(data)[0];
+                    const hits = data[timestampKey];
+                    hitsData.push({
+                        timestamp: parseInt(timestampKey),
+                        hits: hits
+                    });
+                }
+            }
+
+            return hitsData;
+        }
+
+        function renderChart(data) {
             const ctx = document.getElementById('hitsChart').getContext('2d');
-            const hitsChart = new Chart(ctx, {
+            const chart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: timestamps,  // Timestamps for the X-axis
+                    labels: data.map(d => new Date(d.timestamp * 1000).toLocaleString()), // Convert timestamp to human-readable date
                     datasets: [{
-                        label: 'Hits Count Over Time',
-                        data: hitsData,  // Hits count for the Y-axis
+                        label: 'Number of Hits',
+                        data: data.map(d => d.hits),
                         borderColor: 'rgba(75, 192, 192, 1)',
-                        borderWidth: 2
+                        fill: false,
+                        tension: 0.1
                     }]
                 },
                 options: {
                     scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'minute'
+                            },
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        },
                         y: {
-                            beginAtZero: true
+                            title: {
+                                display: true,
+                                text: 'Number of Hits'
+                            }
                         }
                     }
                 }
             });
         }
 
-        // Call the function to create the chart when the page loads
-        createChart();
+        // Fetch the data and render the chart
+        fetchAllData().then(renderChart);
     </script>
 </body>
 </html>
