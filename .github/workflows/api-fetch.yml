@@ -19,7 +19,7 @@ jobs:
 
           # Extract the timestamp and hits using jq
           TIMESTAMP=$(echo $RESPONSE | jq -r '.timestamp')
-          HITS=$(echo $RESPONSE | jq -r '.hits.hits')
+          HITS=$(echo $RESPONSE | jq -r '.hits')
 
           # Create a directory for storing data
           mkdir -p $GITHUB_WORKSPACE/data
