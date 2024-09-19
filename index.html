@@ -48,7 +48,7 @@
 
         // Fetch the data.json from the root directory
         async function fetchAllData() {
-            const data = await fetchJSON('/data.json');
+            const data = await fetchJSON('items.json');
             if (!data) return [];
 
             const hitsData = [];
