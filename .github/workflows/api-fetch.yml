@@ -66,7 +66,12 @@ jobs:
           # Apply the stashed changes back
           git stash pop || true
 
-          # Append the new hits data to items.json
+          # Check if items.json exists, if not initialize it as an empty JSON object
+          if [ ! -f items.json ]; then
+            echo "{}" > items.json
+          fi
+
+          # Append the new hits data to items.json using jq
           jq -s '.[0] * .[1]' $GITHUB_WORKSPACE/data/items.json items.json > $GITHUB_WORKSPACE/data/merged_items.json
 
           # Replace items.json with the merged content
