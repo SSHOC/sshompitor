@@ -12,22 +12,45 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Query API and extract timestamp and hits
+      - name: Query API and extract hits
         run: |
           # Generate the current timestamp (Unix time in seconds)
           TIMESTAMP=$(date +%s)
-          
-          # Query the API
-          RESPONSE=$(curl -s https://marketplace-api.sshopencloud.eu/api/item-search?categories=&advanced=false&includeSteps=false )
 
-          # Extract the hits using jq
-          HITS=$(echo $RESPONSE | jq -r '.hits')
+          # Declare an associative array to store categories and their API endpoints
+          declare -A ENDPOINTS=(
+            ["tool-or-service"]="https://marketplace-api.sshopencloud.eu/api/item-search?categories=tool-or-service&advanced=false&includeSteps=false"
+            ["training-material"]="https://marketplace-api.sshopencloud.eu/api/item-search?categories=training-material&advanced=false&includeSteps=false"
+            ["publication"]="https://marketplace-api.sshopencloud.eu/api/item-search?categories=publication&advanced=false&includeSteps=false"
+            ["dataset"]="https://marketplace-api.sshopencloud.eu/api/item-search?categories=dataset&advanced=false&includeSteps=false"
+            ["workflow"]="https://marketplace-api.sshopencloud.eu/api/item-search?categories=workflow&advanced=false&includeSteps=false"
+          )
 
           # Create a directory for storing data
           mkdir -p $GITHUB_WORKSPACE/data
 
-          # Save the result in the format {timestamp: hits}
-          echo "{\"$TIMESTAMP\": $HITS}" > $GITHUB_WORKSPACE/data/hits_$TIMESTAMP.json
+          # Initialize the hits JSON structure
+          echo "{\"$TIMESTAMP\": {" > $GITHUB_WORKSPACE/data/items.json
+
+          # Iterate over the categories and query the corresponding API
+          FIRST_ITEM=true
+          for CATEGORY in "${!ENDPOINTS[@]}"; do
+            # Query the API
+            RESPONSE=$(curl -s "${ENDPOINTS[$CATEGORY]}")
+            # Extract the hits using jq
+            HITS=$(echo $RESPONSE | jq -r '.hits')
+
+            # Append the results to the JSON file in the desired format
+            if [ "$FIRST_ITEM" = true ]; then
+              echo "\"$CATEGORY\": $HITS" >> $GITHUB_WORKSPACE/data/items.json
+              FIRST_ITEM=false
+            else
+              echo ", \"$CATEGORY\": $HITS" >> $GITHUB_WORKSPACE/data/items.json
+            fi
+          done
+
+          # Close the JSON structure
+          echo "}}" >> $GITHUB_WORKSPACE/data/items.json
 
       - name: Commit and push data
         run: |
@@ -37,10 +60,14 @@ jobs:
           # Pull the latest changes from the remote
           git pull --rebase https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
 
-          # Add the new file(s) to the repository
-          git add $GITHUB_WORKSPACE/data/*.json
+          # Append the new hits data to items.json
+          jq -s '.[0] * .[1]' $GITHUB_WORKSPACE/data/items.json items.json > $GITHUB_WORKSPACE/data/merged_items.json
 
-          # Commit the new data with a message
+          # Replace items.json with the merged content
+          mv $GITHUB_WORKSPACE/data/merged_items.json items.json
+
+          # Add and commit the updated items.json
+          git add items.json
           git commit -m "Add new hits count at $(date)" || exit 0  # No commit if no changes
 
           # Push the changes to the remote repository
