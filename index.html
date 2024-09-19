@@ -16,23 +16,62 @@
 
     <style>
         /* Make the chart take up a quarter of the screen */
+        #container {
+            display: flex;
+            justify-content: space-between;
+        }
+
         #chartContainer {
-            width: 50%;
+            width: 60%;
             height: 50vh; /* 50% of the viewport height */
-            margin: 0 auto;
         }
         canvas {
             width: 100% !important; /* Ensure canvas takes full width of its container */
             height: 100% !important; /* Ensure canvas takes full height of its container */
+        }
+
+        #dataTable {
+            width: 35%;
+            border-collapse: collapse;
+        }
+
+        #dataTable th, #dataTable td {
+            border: 1px solid black;
+            padding: 8px;
+            text-align: left;
+        }
+
+        #dataTable th {
+            background-color: #f2f2f2;
         }
     </style>
 </head>
 <body>
     <h1>Total number of items in the SSHOMP</h1>
 
-    <!-- Container for the chart -->
-    <div id="chartContainer">
-        <canvas id="hitsChart"></canvas>
+    <div id="container">
+        <!-- Container for the chart -->
+        <div id="chartContainer">
+            <canvas id="hitsChart"></canvas>
+        </div>
+
+        <!-- Table to display the 7-day change -->
+        <table id="dataTable">
+         <caption>Change in items over 7 days</caption>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Dataset</th>
+                    <th>Training Material</th>
+                    <th>Publication</th>
+                    <th>Workflow</th>
+                    <th>Tool or Service</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Data will be dynamically populated here -->
+            </tbody>
+        </table>
     </div>
 
     <script>
@@ -46,16 +85,67 @@
             return await response.json();
         }
 
+        // Calculate the difference compared to 7 days ago for each category
+        function calculate7DayChange(data) {
+            const MS_IN_7_DAYS = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+            const changedData = data.map((current, index) => {
+                const timestamp = current.timestamp;
+                const prevTimestamp = timestamp - (MS_IN_7_DAYS / 1000); // Convert 7 days in milliseconds to seconds
+
+                // Find the data point 7 days ago
+                const prevData = data.find(d => d.timestamp <= prevTimestamp);
+
+                return {
+                    timestamp: current.timestamp,
+                    total: current.total,
+                    dataset: current.dataset,
+                    trainingMaterial: current.trainingMaterial,
+                    publication: current.publication,
+                    workflow: current.workflow,
+                    toolOrService: current.toolOrService,
+                    datasetChange: prevData ? current.dataset - prevData.dataset : null,
+                    trainingMaterialChange: prevData ? current.trainingMaterial - prevData.trainingMaterial : null,
+                    publicationChange: prevData ? current.publication - prevData.publication : null,
+                    workflowChange: prevData ? current.workflow - prevData.workflow : null,
+                    toolOrServiceChange: prevData ? current.toolOrService - prevData.toolOrService : null
+                };
+            });
+
+            return changedData;
+        }
+
+        // Populate the table with 7-day changes
+        function populateTable(data) {
+            const tableBody = document.querySelector('#dataTable tbody');
+            tableBody.innerHTML = '';  // Clear any existing rows
+
+            data.forEach(d => {
+                const date = new Date(d.timestamp * 1000).toLocaleDateString();
+
+                const row = `
+                    <tr>
+                        <td>${date}</td>
+                        <td>${d.datasetChange !== null ? d.datasetChange : 'N/A'}</td>
+                        <td>${d.trainingMaterialChange !== null ? d.trainingMaterialChange : 'N/A'}</td>
+                        <td>${d.publicationChange !== null ? d.publicationChange : 'N/A'}</td>
+                        <td>${d.workflowChange !== null ? d.workflowChange : 'N/A'}</td>
+                        <td>${d.toolOrServiceChange !== null ? d.toolOrServiceChange : 'N/A'}</td>
+                    </tr>
+                `;
+                tableBody.insertAdjacentHTML('beforeend', row);
+            });
+        }
+
         // Fetch the data.json from the root directory
         async function fetchAllData() {
             const data = await fetchJSON('items.json');
             if (!data) return [];
 
             const hitsData = [];
-            
+
             for (const timestamp in data) {
                 const categories = data[timestamp];
-                
+
                 // Calculate total hits by summing all categories
                 const totalHits = Object.values(categories).reduce((sum, value) => sum + value, 0);
 
@@ -70,7 +160,13 @@
                 });
             }
 
-            return hitsData;
+            // Calculate 7-day change for each category
+            const changedData = calculate7DayChange(hitsData);
+
+            // Populate the table with the 7-day changes
+            populateTable(changedData);
+
+            return changedData;
         }
 
         // Render the chart using Chart.js
