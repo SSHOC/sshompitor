@@ -36,7 +36,7 @@
     </div>
 
     <script>
-        // Fetch a single JSON file
+        // Fetch a single JSON file from the root directory
         async function fetchJSON(file) {
             const response = await fetch(file);
             if (!response.ok) {
@@ -46,27 +46,28 @@
             return await response.json();
         }
 
-        // Fetch the index.json to get a list of all available .json files
+        // Fetch the data.json from the root directory
         async function fetchAllData() {
-            const indexResponse = await fetch('data/index.json');
-            const files = await indexResponse.json(); // This gives the array of .json file names
+            const data = await fetchJSON('/data.json');
+            if (!data) return [];
 
             const hitsData = [];
+            
+            for (const timestamp in data) {
+                const categories = data[timestamp];
+                
+                // Calculate total hits by summing all categories
+                const totalHits = Object.values(categories).reduce((sum, value) => sum + value, 0);
 
-            for (const file of files) {
-                const data = await fetchJSON(file);
-                if (data) {
-                    const timestamp = Object.keys(data)[0];  // Extract timestamp (key)
-                    const hits = data[timestamp];  // Extract hits (value)
-
-                    // Only add data points where hits is greater than 0
-                    if (hits > 0) {
-                        hitsData.push({
-                            timestamp: parseInt(timestamp),
-                            hits: hits
-                        });
-                    }
-                }
+                hitsData.push({
+                    timestamp: parseInt(timestamp),
+                    total: totalHits,
+                    dataset: categories['dataset'],
+                    trainingMaterial: categories['training-material'],
+                    publication: categories['publication'],
+                    workflow: categories['workflow'],
+                    toolOrService: categories['tool-or-service']
+                });
             }
 
             return hitsData;
@@ -83,21 +84,58 @@
                 type: 'line',
                 data: {
                     labels: data.map(d => new Date(d.timestamp * 1000)), // Use Date object for timestamps
-                    datasets: [{
-                        label: 'Number of Hits',
-                        data: data.map(d => d.hits),
-                        borderColor: 'rgba(75, 192, 192, 1)',
-                        fill: false,
-                        tension: 0.1
-                    }]
+                    datasets: [
+                        {
+                            label: 'Total Hits',
+                            data: data.map(d => d.total),
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            fill: false,
+                            tension: 0.1
+                        },
+                        {
+                            label: 'Dataset',
+                            data: data.map(d => d.dataset),
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            fill: false,
+                            tension: 0.1
+                        },
+                        {
+                            label: 'Training Material',
+                            data: data.map(d => d.trainingMaterial),
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            fill: false,
+                            tension: 0.1
+                        },
+                        {
+                            label: 'Publication',
+                            data: data.map(d => d.publication),
+                            borderColor: 'rgba(255, 206, 86, 1)',
+                            fill: false,
+                            tension: 0.1
+                        },
+                        {
+                            label: 'Workflow',
+                            data: data.map(d => d.workflow),
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            fill: false,
+                            tension: 0.1
+                        },
+                        {
+                            label: 'Tool or Service',
+                            data: data.map(d => d.toolOrService),
+                            borderColor: 'rgba(153, 102, 255, 1)',
+                            fill: false,
+                            tension: 0.1
+                        }
+                    ]
                 },
                 options: {
                     scales: {
                         x: {
                             type: 'time',
                             time: {
-                                unit: 'hour',  // Adjust the time unit to 'day'
-                                stepSize: 12,  // Step size of 1 day
+                                unit: 'day',  // Adjust the time unit to 'day'
+                                stepSize: 1,  // Step size of 1 day
                                 tooltipFormat: 'PPpp'  // Date format for tooltips
                             },
                             title: {
