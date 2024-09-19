@@ -57,8 +57,14 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
+          # Stash any local changes to avoid conflicts
+          git stash
+
           # Pull the latest changes from the remote
           git pull --rebase https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
+
+          # Apply the stashed changes back
+          git stash pop || true
 
           # Append the new hits data to items.json
           jq -s '.[0] * .[1]' $GITHUB_WORKSPACE/data/items.json items.json > $GITHUB_WORKSPACE/data/merged_items.json
