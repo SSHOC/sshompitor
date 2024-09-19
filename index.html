@@ -4,20 +4,36 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hits Over Time</title>
-    
+
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
+
     <!-- Chart.js adapter for date-fns to handle time scales -->
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
-    
+
     <!-- date-fns for date formatting -->
     <script src="https://cdn.jsdelivr.net/npm/date-fns@4.1.0/cdn.min.js"></script>
 
+    <style>
+        /* Make the chart take up a quarter of the screen */
+        #chartContainer {
+            width: 50%;
+            height: 50vh; /* 50% of the viewport height */
+            margin: 0 auto;
+        }
+        canvas {
+            width: 100% !important; /* Ensure canvas takes full width of its container */
+            height: 100% !important; /* Ensure canvas takes full height of its container */
+        }
+    </style>
 </head>
 <body>
     <h1>Total number of items in the SSHOMP</h1>
-    <canvas id="hitsChart" width="800" height="400"></canvas>
+
+    <!-- Container for the chart -->
+    <div id="chartContainer">
+        <canvas id="hitsChart"></canvas>
+    </div>
 
     <script>
         // Fetch a single JSON file
@@ -34,19 +50,22 @@
         async function fetchAllData() {
             const indexResponse = await fetch('data/index.json');
             const files = await indexResponse.json(); // This gives the array of .json file names
-            
+
             const hitsData = [];
-            
+
             for (const file of files) {
                 const data = await fetchJSON(file);
                 if (data) {
                     const timestamp = Object.keys(data)[0];  // Extract timestamp (key)
                     const hits = data[timestamp];  // Extract hits (value)
-                    
-                    hitsData.push({
-                        timestamp: parseInt(timestamp),
-                        hits: hits
-                    });
+
+                    // Only add data points where hits is greater than 0
+                    if (hits > 0) {
+                        hitsData.push({
+                            timestamp: parseInt(timestamp),
+                            hits: hits
+                        });
+                    }
                 }
             }
 
@@ -56,6 +75,10 @@
         // Render the chart using Chart.js
         function renderChart(data) {
             const ctx = document.getElementById('hitsChart').getContext('2d');
+
+            // Get the oldest timestamp for the x-axis start
+            const oldestTimestamp = new Date(Math.min(...data.map(d => d.timestamp)) * 1000);
+
             const chart = new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -74,21 +97,25 @@
                             type: 'time',
                             time: {
                                 unit: 'hour',  // Adjust the time unit to 'day'
-                                stepSize: 1,  // Step size of 1 day
+                                stepSize: 12,  // Step size of 1 day
                                 tooltipFormat: 'PPpp'  // Date format for tooltips
                             },
                             title: {
                                 display: true,
                                 text: 'Date'
-                            }
+                            },
+                            min: oldestTimestamp // Start x-axis at the oldest timestamp
                         },
                         y: {
+                            beginAtZero: true, // Ensure y-axis starts from 0
                             title: {
                                 display: true,
-                                text: 'Number of Hits'
+                                text: 'Total Number of Items'
                             }
                         }
-                    }
+                    },
+                    responsive: true, // Ensure the chart resizes with the container
+                    maintainAspectRatio: false // Disable aspect ratio to fit container
                 }
             });
         }
