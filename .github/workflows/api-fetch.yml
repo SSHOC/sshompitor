@@ -2,7 +2,7 @@ name: Fetch API Hits Count
 
 on:
   schedule:
-    - cron: "*/5 * * * *"  # Run every 30 minutes
+    - cron: "*/30 * * * *"  # Run every 30 minutes
 
 jobs:
   fetch_api_hits:
