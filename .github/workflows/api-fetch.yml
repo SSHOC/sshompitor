@@ -2,7 +2,7 @@ name: Fetch API Hits Count
 
 on:
   schedule:
-    - cron: "*/30 * * * *"  # Run every 30 minutes
+    - cron: "*/5 * * * *"  # Run every 30 minutes
 
 jobs:
   fetch_api_hits:
@@ -57,14 +57,8 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Stash any local changes to avoid conflicts
-          git stash
-
-          # Pull the latest changes from the remote
-          git pull --rebase https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
-
-          # Apply the stashed changes back
-          git stash pop || true
+          # Pull the latest changes from the remote without rebase to avoid conflicts
+          git pull --no-rebase https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
 
           # Check if items.json exists, if not initialize it as an empty JSON object
           if [ ! -f items.json ]; then
@@ -76,6 +70,9 @@ jobs:
 
           # Replace items.json with the merged content
           mv $GITHUB_WORKSPACE/data/merged_items.json items.json
+
+          # Ensure data/items.json is not being tracked
+          git rm --cached $GITHUB_WORKSPACE/data/items.json || true
 
           # Add and commit the updated items.json
           git add items.json
