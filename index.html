@@ -15,7 +15,6 @@
     <script src="https://cdn.jsdelivr.net/npm/date-fns@4.1.0/cdn.min.js"></script>
 
     <style>
-        /* Make the chart take up a quarter of the screen */
         #container {
             display: flex;
             justify-content: space-between;
@@ -23,11 +22,11 @@
 
         #chartContainer {
             width: 60%;
-            height: 50vh; /* 50% of the viewport height */
+            height: 50vh;
         }
         canvas {
-            width: 100% !important; /* Ensure canvas takes full width of its container */
-            height: 100% !important; /* Ensure canvas takes full height of its container */
+            width: 100% !important;
+            height: 100% !important;
         }
 
         #dataTable {
@@ -44,38 +43,40 @@
         #dataTable th {
             background-color: #f2f2f2;
         }
+
+        /* Green for positive changes, red for negative */
+        .positive {
+            background-color: #c8e6c9; /* light green */
+        }
+
+        .negative {
+            background-color: #ffcdd2; /* light red */
+        }
     </style>
 </head>
 <body>
     <h1>Total number of items in the SSHOMP</h1>
 
     <div id="container">
-        <!-- Container for the chart -->
         <div id="chartContainer">
             <canvas id="hitsChart"></canvas>
         </div>
 
-        <!-- Table to display the 7-day change -->
         <table id="dataTable">
-         <caption>Change in items over 7 days</caption>
+            <caption>Change in items (1-day, 7-day, 30-day)</caption>
             <thead>
                 <tr>
-                    <th>Date</th>
-                    <th>Dataset</th>
-                    <th>Training Material</th>
-                    <th>Publication</th>
-                    <th>Workflow</th>
-                    <th>Tool or Service</th>
+                    <th>Metric</th>
+                    <th>1-day</th>
+                    <th>7-day</th>
+                    <th>30-day</th>
                 </tr>
             </thead>
-            <tbody>
-                <!-- Data will be dynamically populated here -->
-            </tbody>
+            <tbody></tbody>
         </table>
     </div>
 
     <script>
-        // Fetch a single JSON file from the root directory
         async function fetchJSON(file) {
             const response = await fetch(file);
             if (!response.ok) {
@@ -85,142 +86,153 @@
             return await response.json();
         }
 
-        // Calculate the difference compared to 7 days ago for each category
-        function calculate7DayChange(data) {
-            const MS_IN_7_DAYS = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
-            const changedData = data.map((current, index) => {
-                const timestamp = current.timestamp;
-                const prevTimestamp = timestamp - (MS_IN_7_DAYS / 1000); // Convert 7 days in milliseconds to seconds
+        // Calculate the change from the latest data point
+        function calculateDifference(data, days) {
+            const SECONDS_IN_A_DAY = days * 24 * 60 * 60;  // Number of seconds in the given number of days
+            const latest = data[data.length - 1];  // Most recent data point
+            const targetTimestamp = latest.timestamp - SECONDS_IN_A_DAY;  // Target timestamp X days before the latest
 
-                // Find the data point 7 days ago
-                const prevData = data.find(d => d.timestamp <= prevTimestamp);
+            // Find the closest data point that is before or equal to the target timestamp
+            let target = null;
+            for (let i = data.length - 1; i >= 0; i--) {
+                if (data[i].timestamp <= targetTimestamp) {
+                    target = data[i];
+                    break;
+                }
+            }
 
-                return {
-                    timestamp: current.timestamp,
-                    total: current.total,
-                    dataset: current.dataset,
-                    trainingMaterial: current.trainingMaterial,
-                    publication: current.publication,
-                    workflow: current.workflow,
-                    toolOrService: current.toolOrService,
-                    datasetChange: prevData ? current.dataset - prevData.dataset : null,
-                    trainingMaterialChange: prevData ? current.trainingMaterial - prevData.trainingMaterial : null,
-                    publicationChange: prevData ? current.publication - prevData.publication : null,
-                    workflowChange: prevData ? current.workflow - prevData.workflow : null,
-                    toolOrServiceChange: prevData ? current.toolOrService - prevData.toolOrService : null
-                };
-            });
+            if (!target) return null;  // If no data exists for that time frame
 
-            return changedData;
+            // Calculate the total dynamically based on the fields
+            const latestTotal = latest.dataset + latest.trainingMaterial + latest.publication + latest.workflow + latest.toolOrService;
+            const targetTotal = target.dataset + target.trainingMaterial + target.publication + target.workflow + target.toolOrService;
+
+            return {
+                dataset: latest.dataset - target.dataset,
+                trainingMaterial: latest.trainingMaterial - target.trainingMaterial,
+                publication: latest.publication - target.publication,
+                workflow: latest.workflow - target.workflow,
+                toolOrService: latest.toolOrService - target.toolOrService,
+                total: latestTotal - targetTotal  // Calculate the difference in total
+            };
         }
 
-        // Populate the table with 7-day changes
-        function populateTable(data) {
-            const tableBody = document.querySelector('#dataTable tbody');
-            tableBody.innerHTML = '';  // Clear any existing rows
 
-            data.forEach(d => {
-                const date = new Date(d.timestamp * 1000).toLocaleDateString();
+        // Populate the table with changes
+            function populateTable(latest, changes1Day, changes7Day, changes30Day) {
+                const tableBody = document.querySelector('#dataTable tbody');
+                tableBody.innerHTML = '';  // Clear existing rows
 
-                const row = `
-                    <tr>
-                        <td>${date}</td>
-                        <td>${d.datasetChange !== null ? d.datasetChange : 'N/A'}</td>
-                        <td>${d.trainingMaterialChange !== null ? d.trainingMaterialChange : 'N/A'}</td>
-                        <td>${d.publicationChange !== null ? d.publicationChange : 'N/A'}</td>
-                        <td>${d.workflowChange !== null ? d.workflowChange : 'N/A'}</td>
-                        <td>${d.toolOrServiceChange !== null ? d.toolOrServiceChange : 'N/A'}</td>
-                    </tr>
-                `;
-                tableBody.insertAdjacentHTML('beforeend', row);
-            });
-        }
+                const metrics = ['dataset', 'trainingMaterial', 'publication', 'workflow', 'toolOrService', 'total'];
+                const labels = ['Dataset', 'Training Material', 'Publication', 'Workflow', 'Tool or Service', 'Total'];
 
-        // Fetch the data.json from the root directory
+                metrics.forEach((metric, index) => {
+                    const row = document.createElement('tr');
+                    const labelCell = document.createElement('td');
+                    labelCell.textContent = labels[index];
+
+                    const createCell = (change, value) => {
+                        const cell = document.createElement('td');
+                        if (change === null) {
+                            cell.textContent = 'N/A';
+                        } else {
+                            cell.textContent = value !== undefined ? value : change;
+                            cell.className = change > 0 ? 'positive' : (change < 0 ? 'negative' : '');
+                        }
+                        return cell;
+                    };
+
+                    row.appendChild(labelCell);
+                    row.appendChild(createCell(changes1Day ? changes1Day[metric] : null));
+                    row.appendChild(createCell(changes7Day ? changes7Day[metric] : null));
+                    row.appendChild(createCell(changes30Day ? changes30Day[metric] : null));
+
+                    tableBody.appendChild(row);
+                });
+            }
+
         async function fetchAllData() {
             const data = await fetchJSON('items.json');
             if (!data) return [];
 
-            const hitsData = [];
-
-            for (const timestamp in data) {
+            const hitsData = Object.keys(data).map(timestamp => {
                 const categories = data[timestamp];
-
-                // Calculate total hits by summing all categories
-                const totalHits = Object.values(categories).reduce((sum, value) => sum + value, 0);
-
-                hitsData.push({
+                return {
                     timestamp: parseInt(timestamp),
-                    total: totalHits,
                     dataset: categories['dataset'],
                     trainingMaterial: categories['training-material'],
                     publication: categories['publication'],
                     workflow: categories['workflow'],
-                    toolOrService: categories['tool-or-service']
-                });
-            }
+                    toolOrService: categories['tool-or-service'],
+                    total: (categories['dataset']+categories['training-material']+categories['publication']+categories['workflow']+categories['tool-or-service'])
+                };
+            });
 
-            // Calculate 7-day change for each category
-            const changedData = calculate7DayChange(hitsData);
+            if (hitsData.length < 1) return;
 
-            // Populate the table with the 7-day changes
-            populateTable(changedData);
+            const changes1Day = calculateDifference(hitsData, 1);
+            const changes7Day = calculateDifference(hitsData, 7);
+            const changes30Day = calculateDifference(hitsData, 30);
 
-            return changedData;
+            // Populate table with the differences from the latest data point
+            populateTable(hitsData[hitsData.length - 1], changes1Day, changes7Day, changes30Day);
+
+            return hitsData;
         }
 
-        // Render the chart using Chart.js
         function renderChart(data) {
             const ctx = document.getElementById('hitsChart').getContext('2d');
-
-            // Get the oldest timestamp for the x-axis start
-            const oldestTimestamp = new Date(Math.min(...data.map(d => d.timestamp)) * 1000);
-
             const chart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: data.map(d => new Date(d.timestamp * 1000)), // Use Date object for timestamps
+                    labels: data.map(d => new Date(d.timestamp * 1000)),
                     datasets: [
                         {
                             label: 'Total Hits',
                             data: data.map(d => d.total),
-                            borderColor: 'rgba(75, 192, 192, 1)',
-                            fill: false,
+                            borderColor: 'rgba(0, 0, 0, 1)',
+                            backgroundColor: 'rgba(0, 0, 0, 0.1)',
+                            fill: true,
                             tension: 0.1
                         },
                         {
                             label: 'Dataset',
                             data: data.map(d => d.dataset),
-                            borderColor: 'rgba(255, 99, 132, 1)',
-                            fill: false,
+                            borderColor: 'rgba(17, 159, 4, 1)',
+                            backgroundColor: 'rgba(17, 159, 4, 0.1)',
+                            fill: true,
                             tension: 0.1
                         },
                         {
                             label: 'Training Material',
                             data: data.map(d => d.trainingMaterial),
-                            borderColor: 'rgba(54, 162, 235, 1)',
-                            fill: false,
+                            borderColor: 'rgba(235, 220, 0, 1)',
+                            backgroundColor: 'rgba(235, 220, 0, 0.1)',
+                            fill: true,
                             tension: 0.1
                         },
                         {
                             label: 'Publication',
                             data: data.map(d => d.publication),
-                            borderColor: 'rgba(255, 206, 86, 1)',
-                            fill: false,
+                            borderColor: 'rgba(200, 0, 0, 1)',
+                            backgroundColor: 'rgba(200, 0, 0, 0.1)',
+                            fill: true,
                             tension: 0.1
                         },
                         {
                             label: 'Workflow',
                             data: data.map(d => d.workflow),
-                            borderColor: 'rgba(75, 192, 192, 1)',
-                            fill: false,
+                            borderColor: 'rgba(139, 0, 230, 0.8)',
+                            backgroundColor: 'rgba(139, 0, 230, 0.1)',
+                            fill: true,
                             tension: 0.1
                         },
                         {
                             label: 'Tool or Service',
                             data: data.map(d => d.toolOrService),
-                            borderColor: 'rgba(153, 102, 255, 1)',
-                            fill: false,
+                            borderColor: 'rgba(16, 0, 255, 1)',
+                            backgroundColor: 'rgba(16, 0, 255, 0.1)',
+                            fill: true,
                             tension: 0.1
                         }
                     ]
@@ -229,32 +241,20 @@
                     scales: {
                         x: {
                             type: 'time',
-                            time: {
-                                unit: 'day',  // Adjust the time unit to 'day'
-                                stepSize: 1,  // Step size of 1 day
-                                tooltipFormat: 'PPpp'  // Date format for tooltips
-                            },
-                            title: {
-                                display: true,
-                                text: 'Date'
-                            },
-                            min: oldestTimestamp // Start x-axis at the oldest timestamp
+                            time: { unit: 'day', stepSize: 1, tooltipFormat: 'PPpp' },
+                            title: { display: true, text: 'Date' }
                         },
                         y: {
-                            beginAtZero: true, // Ensure y-axis starts from 0
-                            title: {
-                                display: true,
-                                text: 'Total Number of Items'
-                            }
+                            beginAtZero: true,
+                            title: { display: true, text: 'Total Number of Items' }
                         }
                     },
-                    responsive: true, // Ensure the chart resizes with the container
-                    maintainAspectRatio: false // Disable aspect ratio to fit container
+                    responsive: true,
+                    maintainAspectRatio: false
                 }
             });
         }
 
-        // Fetch the data and render the chart
         fetchAllData().then(renderChart);
     </script>
 </body>
