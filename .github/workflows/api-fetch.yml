@@ -54,7 +54,7 @@ jobs:
           # Close the JSON structure for categories
           echo "}}" >> $GITHUB_WORKSPACE/data/items.json
 
-          #### Handling source hits ####
+          #### Handling source hits with updated API endpoint ####
           # Query the list of sources from the API
           SOURCES_RESPONSE=$(curl -s "https://marketplace-api.sshopencloud.eu/api/sources")
           # Extract the sources using jq
@@ -66,9 +66,10 @@ jobs:
           # Initialize the first source entry flag
           FIRST_SOURCE=true
 
-          # Iterate over the source IDs and query their hits
+          # Iterate over the source IDs and query their hits from the new endpoint
           for SOURCE_ID in $SOURCE_IDS; do
-            SOURCE_RESPONSE=$(curl -s "https://marketplace-api.sshopencloud.eu/api/sources/$SOURCE_ID/items") 
+            # Fetch the source-specific items and hits
+            SOURCE_RESPONSE=$(curl -s "https://marketplace-api.sshopencloud.eu/api/sources/$SOURCE_ID/items")
             SOURCE_HITS=$(echo $SOURCE_RESPONSE | jq -r '.hits')
             SOURCE_LABEL=$(echo $SOURCE_RESPONSE | jq -r '.label')
 
