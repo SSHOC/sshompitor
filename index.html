@@ -193,46 +193,62 @@
         });
     }
 
-    // Populate the source table
+     // Populate the source table with sorted data and highlight "User-created items"
     function populateSourceTable(sourceData, userCreatedItems) {
         const tableBody = document.querySelector('#sourceDataTable tbody');
         tableBody.innerHTML = '';  // Clear existing rows
 
-        Object.keys(sourceData).forEach(source => {
+        // Convert sourceData object to array of [source, itemCount] and sort by item count in descending order
+        const sortedSourceData = Object.entries(sourceData).sort((a, b) => b[1] - a[1]);
+
+        // Populate table with sorted source data
+        sortedSourceData.forEach(([source, itemCount]) => {
             const row = document.createElement('tr');
             const labelCell = document.createElement('td');
             labelCell.textContent = source;
 
             const valueCell = document.createElement('td');
-            // Ensure the sourceData values are numbers, not objects
-            const itemsCount = typeof sourceData[source] === 'number' ? sourceData[source] : 'N/A';
-            valueCell.textContent = itemsCount;
+            valueCell.textContent = typeof itemCount === 'number' ? itemCount : 'N/A';
 
             row.appendChild(labelCell);
             row.appendChild(valueCell);
             tableBody.appendChild(row);
         });
 
-        // Add "User-created items" row
+        // Add "User-created items" row, and highlight it with a special class
         const row = document.createElement('tr');
+        row.classList.add('highlight');  // Add a class for highlighting the row
+
         const labelCell = document.createElement('td');
         labelCell.textContent = 'User-created items';
 
         const valueCell = document.createElement('td');
-        valueCell.textContent = isNaN(userCreatedItems) ? 'N/A' : userCreatedItems;  // Handle NaN case
+        valueCell.textContent = isNaN(userCreatedItems) ? 'N/A' : userCreatedItems;
 
         row.appendChild(labelCell);
         row.appendChild(valueCell);
         tableBody.appendChild(row);
     }
 
-    // Render the pie chart
+    // Render the pie chart with sorted data and highlight "User-created items"
     function renderPieChart(sourceData, userCreatedItems) {
         const ctx = document.getElementById('sourcePieChart').getContext('2d');
-        const labels = [...Object.keys(sourceData), 'User-created items'];
-        const dataValues = [
-            ...Object.keys(sourceData).map(source => typeof sourceData[source] === 'number' ? sourceData[source] : 0),
-            userCreatedItems
+
+        // Convert sourceData object to array and sort it by item count in descending order
+        const sortedSourceData = Object.entries(sourceData).sort((a, b) => b[1] - a[1]);
+
+        // Create labels and data values arrays, and append "User-created items" at the end
+        const labels = [...sortedSourceData.map(([source]) => source), 'User-created items'];
+        const dataValues = [...sortedSourceData.map(([, itemCount]) => typeof itemCount === 'number' ? itemCount : 0), userCreatedItems];
+
+        const backgroundColors = [
+            ...sortedSourceData.map(() => 'rgba(54, 162, 235, 0.2)'),  // Regular sources color
+            'rgba(255, 99, 132, 0.5)'  // Special color for "User-created items"
+        ];
+
+        const borderColors = [
+            ...sortedSourceData.map(() => 'rgba(54, 162, 235, 1)'),  // Regular sources color
+            'rgba(255, 99, 132, 1)'  // Special color for "User-created items"
         ];
 
         const pieChart = new Chart(ctx, {
@@ -241,22 +257,8 @@
                 labels: labels,
                 datasets: [{
                     data: dataValues,
-                    backgroundColor: [
-                        'rgba(255, 99, 132, 0.2)',
-                        'rgba(54, 162, 235, 0.2)',
-                        'rgba(255, 206, 86, 0.2)',
-                        'rgba(75, 192, 192, 0.2)',
-                        'rgba(153, 102, 255, 0.2)',
-                        'rgba(255, 159, 64, 0.2)'
-                    ],
-                    borderColor: [
-                        'rgba(255, 99, 132, 1)',
-                        'rgba(54, 162, 235, 1)',
-                        'rgba(255, 206, 86, 1)',
-                        'rgba(75, 192, 192, 1)',
-                        'rgba(153, 102, 255, 1)',
-                        'rgba(255, 159, 64, 1)'
-                    ],
+                    backgroundColor: backgroundColors,
+                    borderColor: borderColors,
                     borderWidth: 1
                 }]
             },
@@ -269,6 +271,7 @@
             }
         });
     }
+
 
     function renderChart(data) {
         const ctx = document.getElementById('hitsChart').getContext('2d');
@@ -345,11 +348,15 @@
         });
     }
 
-    async function fetchAllData() {
+async function fetchAllData() {
         const itemsData = await fetchJSON('items.json');
         const sourcesData = await fetchJSON('sources.json');
 
         if (!itemsData || !sourcesData) return [];
+
+        // Get the latest timestamp from sources.json and extract the source items
+        const latestTimestamp = Object.keys(sourcesData).sort().pop();  // Get the latest timestamp
+        const sourceItems = sourcesData[latestTimestamp];  // Extract the actual source data
 
         const hitsData = Object.keys(itemsData).map(timestamp => {
             const categories = itemsData[timestamp];
@@ -377,14 +384,14 @@
         const totalItems = hitsData[hitsData.length - 1].total;
 
         // Ensure all source values are numbers and sum them
-        const totalSourceItems = Object.values(sourcesData).reduce((sum, count) => sum + (typeof count === 'number' ? count : 0), 0);
+        const totalSourceItems = Object.values(sourceItems).reduce((sum, count) => sum + (typeof count === 'number' ? count : 0), 0);
 
         // Calculate "User-created items" (items without a source)
         const userCreatedItems = totalItems - totalSourceItems;
 
         // Populate the source table and render the pie chart
-        populateSourceTable(sourcesData, userCreatedItems);
-        renderPieChart(sourcesData, userCreatedItems);
+        populateSourceTable(sourceItems, userCreatedItems);
+        renderPieChart(sourceItems, userCreatedItems);
 
         return hitsData;
     }
