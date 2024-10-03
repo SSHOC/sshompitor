@@ -120,271 +120,137 @@
     </div>
 
     <script>
-        async function fetchJSON(file) {
-            const response = await fetch(file);
-            if (!response.ok) {
-                console.error("Error fetching " + file);
-                return null;
-            }
-            return await response.json();
+    async function fetchJSON(file) {
+        const response = await fetch(file);
+        if (!response.ok) {
+            console.error("Error fetching " + file);
+            return null;
         }
+        return await response.json();
+    }
 
-        // Calculate the change from the latest data point
-        function calculateDifference(data, days) {
-            const SECONDS_IN_A_DAY = days * 24 * 60 * 60;  // Number of seconds in the given number of days
-            const latest = data[data.length - 1];  // Most recent data point
-            const targetTimestamp = latest.timestamp - SECONDS_IN_A_DAY;  // Target timestamp X days before the latest
+    // Populate the source table
+    function populateSourceTable(sourceData, userCreatedItems) {
+        const tableBody = document.querySelector('#sourceDataTable tbody');
+        tableBody.innerHTML = '';  // Clear existing rows
 
-            // Find the closest data point that is before or equal to the target timestamp
-            let target = null;
-            for (let i = data.length - 1; i >= 0; i--) {
-                if (data[i].timestamp <= targetTimestamp) {
-                    target = data[i];
-                    break;
-                }
-            }
-
-            if (!target) return null;  // If no data exists for that time frame
-
-            // Calculate the total dynamically based on the fields
-            const latestTotal = latest.dataset + latest.trainingMaterial + latest.publication + latest.workflow + latest.toolOrService;
-            const targetTotal = target.dataset + target.trainingMaterial + target.publication + target.workflow + target.toolOrService;
-
-            return {
-                dataset: latest.dataset - target.dataset,
-                trainingMaterial: latest.trainingMaterial - target.trainingMaterial,
-                publication: latest.publication - target.publication,
-                workflow: latest.workflow - target.workflow,
-                toolOrService: latest.toolOrService - target.toolOrService,
-                total: latestTotal - targetTotal  // Calculate the difference in total
-            };
-        }
-
-        // Populate the table with changes
-        function populateTable(latest, changes1Day, changes7Day, changes30Day) {
-            const tableBody = document.querySelector('#dataTable tbody');
-            tableBody.innerHTML = '';  // Clear existing rows
-
-            const metrics = ['dataset', 'trainingMaterial', 'publication', 'workflow', 'toolOrService', 'total'];
-            const labels = ['Dataset', 'Training Material', 'Publication', 'Workflow', 'Tool or Service', 'Total'];
-
-            metrics.forEach((metric, index) => {
-                const row = document.createElement('tr');
-                const labelCell = document.createElement('td');
-                labelCell.textContent = labels[index];
-
-                const createCell = (change, value) => {
-                    const cell = document.createElement('td');
-                    if (change === null) {
-                        cell.textContent = 'N/A';
-                    } else {
-                        cell.textContent = value !== undefined ? value : change;
-                        cell.className = change > 0 ? 'positive' : (change < 0 ? 'negative' : '');
-                    }
-                    return cell;
-                };
-
-                row.appendChild(labelCell);
-                row.appendChild(createCell(changes1Day ? changes1Day[metric] : null));
-                row.appendChild(createCell(changes7Day ? changes7Day[metric] : null));
-                row.appendChild(createCell(changes30Day ? changes30Day[metric] : null));
-
-                tableBody.appendChild(row);
-            });
-        }
-
-        // Populate the source table
-        function populateSourceTable(sourceData, userCreatedItems) {
-            const tableBody = document.querySelector('#sourceDataTable tbody');
-            tableBody.innerHTML = '';  // Clear existing rows
-
-            Object.keys(sourceData).forEach(source => {
-                const row = document.createElement('tr');
-                const labelCell = document.createElement('td');
-                labelCell.textContent = source;
-
-                const valueCell = document.createElement('td');
-                valueCell.textContent = sourceData[source];
-
-                row.appendChild(labelCell);
-                row.appendChild(valueCell);
-                tableBody.appendChild(row);
-            });
-
-            // Add "User-created items" row
+        Object.keys(sourceData).forEach(source => {
             const row = document.createElement('tr');
             const labelCell = document.createElement('td');
-            labelCell.textContent = 'User-created items';
+            labelCell.textContent = source;
 
             const valueCell = document.createElement('td');
-            valueCell.textContent = userCreatedItems;
+            // Ensure the sourceData values are numbers, not objects
+            const itemsCount = typeof sourceData[source] === 'number' ? sourceData[source] : 'N/A';
+            valueCell.textContent = itemsCount;
 
             row.appendChild(labelCell);
             row.appendChild(valueCell);
             tableBody.appendChild(row);
-        }
+        });
 
-        // Render the pie chart
-        function renderPieChart(sourceData, userCreatedItems) {
-            const ctx = document.getElementById('sourcePieChart').getContext('2d');
-            const labels = [...Object.keys(sourceData), 'User-created items'];
-            const dataValues = [...Object.values(sourceData), userCreatedItems];
+        // Add "User-created items" row
+        const row = document.createElement('tr');
+        const labelCell = document.createElement('td');
+        labelCell.textContent = 'User-created items';
 
-            const pieChart = new Chart(ctx, {
-                type: 'pie',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: dataValues,
-                        backgroundColor: [
-                            'rgba(255, 99, 132, 0.2)',
-                            'rgba(54, 162, 235, 0.2)',
-                            'rgba(255, 206, 86, 0.2)',
-                            'rgba(75, 192, 192, 0.2)',
-                            'rgba(153, 102, 255, 0.2)',
-                            'rgba(255, 159, 64, 0.2)'
-                        ],
-                        borderColor: [
-                            'rgba(255, 99, 132, 1)',
-                            'rgba(54, 162, 235, 1)',
-                            'rgba(255, 206, 86, 1)',
-                            'rgba(75, 192, 192, 1)',
-                            'rgba(153, 102, 255, 1)',
-                            'rgba(255, 159, 64, 1)'
-                        ],
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: { position: 'top' },
-                        tooltip: { callbacks: { label: context => `${context.label}: ${context.raw} items` } }
-                    }
+        const valueCell = document.createElement('td');
+        valueCell.textContent = isNaN(userCreatedItems) ? 'N/A' : userCreatedItems;  // Handle NaN case
+
+        row.appendChild(labelCell);
+        row.appendChild(valueCell);
+        tableBody.appendChild(row);
+    }
+
+    // Render the pie chart
+    function renderPieChart(sourceData, userCreatedItems) {
+        const ctx = document.getElementById('sourcePieChart').getContext('2d');
+        const labels = [...Object.keys(sourceData), 'User-created items'];
+        const dataValues = [
+            ...Object.keys(sourceData).map(source => typeof sourceData[source] === 'number' ? sourceData[source] : 0),
+            userCreatedItems
+        ];
+
+        const pieChart = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: dataValues,
+                    backgroundColor: [
+                        'rgba(255, 99, 132, 0.2)',
+                        'rgba(54, 162, 235, 0.2)',
+                        'rgba(255, 206, 86, 0.2)',
+                        'rgba(75, 192, 192, 0.2)',
+                        'rgba(153, 102, 255, 0.2)',
+                        'rgba(255, 159, 64, 0.2)'
+                    ],
+                    borderColor: [
+                        'rgba(255, 99, 132, 1)',
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(255, 206, 86, 1)',
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(153, 102, 255, 1)',
+                        'rgba(255, 159, 64, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: { callbacks: { label: context => `${context.label}: ${context.raw} items` } }
                 }
-            });
-        }
+            }
+        });
+    }
 
-        async function fetchAllData() {
-            const itemsData = await fetchJSON('items.json');
-            const sourcesData = await fetchJSON('sources.json');
+    async function fetchAllData() {
+        const itemsData = await fetchJSON('items.json');
+        const sourcesData = await fetchJSON('sources.json');
 
-            if (!itemsData || !sourcesData) return [];
+        if (!itemsData || !sourcesData) return [];
 
-            const hitsData = Object.keys(itemsData).map(timestamp => {
-                const categories = itemsData[timestamp];
-                return {
-                    timestamp: parseInt(timestamp),
-                    dataset: categories['dataset'],
-                    trainingMaterial: categories['training-material'],
-                    publication: categories['publication'],
-                    workflow: categories['workflow'],
-                    toolOrService: categories['tool-or-service'],
-                    total: (categories['dataset'] + categories['training-material'] + categories['publication'] + categories['workflow'] + categories['tool-or-service'])
-                };
-            });
+        const hitsData = Object.keys(itemsData).map(timestamp => {
+            const categories = itemsData[timestamp];
+            return {
+                timestamp: parseInt(timestamp),
+                dataset: categories['dataset'],
+                trainingMaterial: categories['training-material'],
+                publication: categories['publication'],
+                workflow: categories['workflow'],
+                toolOrService: categories['tool-or-service'],
+                total: (categories['dataset'] + categories['training-material'] + categories['publication'] + categories['workflow'] + categories['tool-or-service'])
+            };
+        });
 
-            if (hitsData.length < 1) return;
+        if (hitsData.length < 1) return;
 
-            const changes1Day = calculateDifference(hitsData, 1);
-            const changes7Day = calculateDifference(hitsData, 7);
-            const changes30Day = calculateDifference(hitsData, 30);
+        const changes1Day = calculateDifference(hitsData, 1);
+        const changes7Day = calculateDifference(hitsData, 7);
+        const changes30Day = calculateDifference(hitsData, 30);
 
-            // Populate table with the differences from the latest data point
-            populateTable(hitsData[hitsData.length - 1], changes1Day, changes7Day, changes30Day);
+        // Populate table with the differences from the latest data point
+        populateTable(hitsData[hitsData.length - 1], changes1Day, changes7Day, changes30Day);
 
-            // Calculate total items from the latest entry in items.json
-            const totalItems = hitsData[hitsData.length - 1].total;
+        // Calculate total items from the latest entry in items.json
+        const totalItems = hitsData[hitsData.length - 1].total;
 
-            // Calculate total items from all sources in sources.json
-            const totalSourceItems = Object.values(sourcesData).reduce((sum, count) => sum + count, 0);
+        // Ensure all source values are numbers and sum them
+        const totalSourceItems = Object.values(sourcesData).reduce((sum, count) => sum + (typeof count === 'number' ? count : 0), 0);
 
-            // Calculate "User-created items" (items without a source)
-            const userCreatedItems = totalItems - totalSourceItems;
+        // Calculate "User-created items" (items without a source)
+        const userCreatedItems = totalItems - totalSourceItems;
 
-            // Populate the source table and render the pie chart
-            populateSourceTable(sourcesData, userCreatedItems);
-            renderPieChart(sourcesData, userCreatedItems);
+        // Populate the source table and render the pie chart
+        populateSourceTable(sourcesData, userCreatedItems);
+        renderPieChart(sourcesData, userCreatedItems);
 
-            return hitsData;
-        }
+        return hitsData;
+    }
 
-        function renderChart(data) {
-            const ctx = document.getElementById('hitsChart').getContext('2d');
-            const chart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: data.map(d => new Date(d.timestamp * 1000)),
-                    datasets: [
-                        {
-                            label: 'Total Hits',
-                            data: data.map(d => d.total),
-                            borderColor: 'rgba(0, 0, 0, 1)',
-                            backgroundColor: 'rgba(0, 0, 0, 0.1)',
-                            fill: true,
-                            tension: 0.1
-                        },
-                        {
-                            label: 'Dataset',
-                            data: data.map(d => d.dataset),
-                            borderColor: 'rgba(17, 159, 4, 1)',
-                            backgroundColor: 'rgba(17, 159, 4, 0.1)',
-                            fill: true,
-                            tension: 0.1
-                        },
-                        {
-                            label: 'Training Material',
-                            data: data.map(d => d.trainingMaterial),
-                            borderColor: 'rgba(235, 220, 0, 1)',
-                            backgroundColor: 'rgba(235, 220, 0, 0.1)',
-                            fill: true,
-                            tension: 0.1
-                        },
-                        {
-                            label: 'Publication',
-                            data: data.map(d => d.publication),
-                            borderColor: 'rgba(200, 0, 0, 1)',
-                            backgroundColor: 'rgba(200, 0, 0, 0.1)',
-                            fill: true,
-                            tension: 0.1
-                        },
-                        {
-                            label: 'Workflow',
-                            data: data.map(d => d.workflow),
-                            borderColor: 'rgba(139, 0, 230, 0.8)',
-                            backgroundColor: 'rgba(139, 0, 230, 0.1)',
-                            fill: true,
-                            tension: 0.1
-                        },
-                        {
-                            label: 'Tool or Service',
-                            data: data.map(d => d.toolOrService),
-                            borderColor: 'rgba(16, 0, 255, 1)',
-                            backgroundColor: 'rgba(16, 0, 255, 0.1)',
-                            fill: true,
-                            tension: 0.1
-                        }
-                    ]
-                },
-                options: {
-                    scales: {
-                        x: {
-                            type: 'time',
-                            time: { unit: 'day', stepSize: 1, tooltipFormat: 'PPpp' },
-                            title: { display: true, text: 'Date' }
-                        },
-                        y: {
-                            beginAtZero: true,
-                            title: { display: true, text: 'Total Number of Items' }
-                        }
-                    },
-                    responsive: true,
-                    maintainAspectRatio: false
-                }
-            });
-        }
-
-        fetchAllData().then(renderChart);
-    </script>
+    fetchAllData().then(renderChart);
+</script>
 </body>
 </html>
