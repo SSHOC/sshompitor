@@ -52,6 +52,31 @@
         .negative {
             background-color: #ffcdd2; /* light red */
         }
+
+        #sourcePieContainer {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 30px;
+        }
+
+        #pieChartContainer {
+            width: 45%;
+        }
+
+        #sourceDataTable {
+            width: 50%;
+            border-collapse: collapse;
+        }
+
+        #sourceDataTable th, #sourceDataTable td {
+            border: 1px solid black;
+            padding: 8px;
+            text-align: left;
+        }
+
+        #sourceDataTable th {
+            background-color: #f2f2f2;
+        }
     </style>
 </head>
 <body>
@@ -70,6 +95,24 @@
                     <th>1-day</th>
                     <th>7-day</th>
                     <th>30-day</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <!-- New Pie Chart and Table Section -->
+    <div id="sourcePieContainer">
+        <div id="pieChartContainer">
+            <canvas id="sourcePieChart"></canvas>
+        </div>
+
+        <table id="sourceDataTable">
+            <caption>Items per Source</caption>
+            <thead>
+                <tr>
+                    <th>Source</th>
+                    <th>Items</th>
                 </tr>
             </thead>
             <tbody></tbody>
@@ -117,46 +160,119 @@
             };
         }
 
-
         // Populate the table with changes
-            function populateTable(latest, changes1Day, changes7Day, changes30Day) {
-                const tableBody = document.querySelector('#dataTable tbody');
-                tableBody.innerHTML = '';  // Clear existing rows
+        function populateTable(latest, changes1Day, changes7Day, changes30Day) {
+            const tableBody = document.querySelector('#dataTable tbody');
+            tableBody.innerHTML = '';  // Clear existing rows
 
-                const metrics = ['dataset', 'trainingMaterial', 'publication', 'workflow', 'toolOrService', 'total'];
-                const labels = ['Dataset', 'Training Material', 'Publication', 'Workflow', 'Tool or Service', 'Total'];
+            const metrics = ['dataset', 'trainingMaterial', 'publication', 'workflow', 'toolOrService', 'total'];
+            const labels = ['Dataset', 'Training Material', 'Publication', 'Workflow', 'Tool or Service', 'Total'];
 
-                metrics.forEach((metric, index) => {
-                    const row = document.createElement('tr');
-                    const labelCell = document.createElement('td');
-                    labelCell.textContent = labels[index];
+            metrics.forEach((metric, index) => {
+                const row = document.createElement('tr');
+                const labelCell = document.createElement('td');
+                labelCell.textContent = labels[index];
 
-                    const createCell = (change, value) => {
-                        const cell = document.createElement('td');
-                        if (change === null) {
-                            cell.textContent = 'N/A';
-                        } else {
-                            cell.textContent = value !== undefined ? value : change;
-                            cell.className = change > 0 ? 'positive' : (change < 0 ? 'negative' : '');
-                        }
-                        return cell;
-                    };
+                const createCell = (change, value) => {
+                    const cell = document.createElement('td');
+                    if (change === null) {
+                        cell.textContent = 'N/A';
+                    } else {
+                        cell.textContent = value !== undefined ? value : change;
+                        cell.className = change > 0 ? 'positive' : (change < 0 ? 'negative' : '');
+                    }
+                    return cell;
+                };
 
-                    row.appendChild(labelCell);
-                    row.appendChild(createCell(changes1Day ? changes1Day[metric] : null));
-                    row.appendChild(createCell(changes7Day ? changes7Day[metric] : null));
-                    row.appendChild(createCell(changes30Day ? changes30Day[metric] : null));
+                row.appendChild(labelCell);
+                row.appendChild(createCell(changes1Day ? changes1Day[metric] : null));
+                row.appendChild(createCell(changes7Day ? changes7Day[metric] : null));
+                row.appendChild(createCell(changes30Day ? changes30Day[metric] : null));
 
-                    tableBody.appendChild(row);
-                });
-            }
+                tableBody.appendChild(row);
+            });
+        }
+
+        // Populate the source table
+        function populateSourceTable(sourceData, userCreatedItems) {
+            const tableBody = document.querySelector('#sourceDataTable tbody');
+            tableBody.innerHTML = '';  // Clear existing rows
+
+            Object.keys(sourceData).forEach(source => {
+                const row = document.createElement('tr');
+                const labelCell = document.createElement('td');
+                labelCell.textContent = source;
+
+                const valueCell = document.createElement('td');
+                valueCell.textContent = sourceData[source];
+
+                row.appendChild(labelCell);
+                row.appendChild(valueCell);
+                tableBody.appendChild(row);
+            });
+
+            // Add "User-created items" row
+            const row = document.createElement('tr');
+            const labelCell = document.createElement('td');
+            labelCell.textContent = 'User-created items';
+
+            const valueCell = document.createElement('td');
+            valueCell.textContent = userCreatedItems;
+
+            row.appendChild(labelCell);
+            row.appendChild(valueCell);
+            tableBody.appendChild(row);
+        }
+
+        // Render the pie chart
+        function renderPieChart(sourceData, userCreatedItems) {
+            const ctx = document.getElementById('sourcePieChart').getContext('2d');
+            const labels = [...Object.keys(sourceData), 'User-created items'];
+            const dataValues = [...Object.values(sourceData), userCreatedItems];
+
+            const pieChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: dataValues,
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.2)',
+                            'rgba(54, 162, 235, 0.2)',
+                            'rgba(255, 206, 86, 0.2)',
+                            'rgba(75, 192, 192, 0.2)',
+                            'rgba(153, 102, 255, 0.2)',
+                            'rgba(255, 159, 64, 0.2)'
+                        ],
+                        borderColor: [
+                            'rgba(255, 99, 132, 1)',
+                            'rgba(54, 162, 235, 1)',
+                            'rgba(255, 206, 86, 1)',
+                            'rgba(75, 192, 192, 1)',
+                            'rgba(153, 102, 255, 1)',
+                            'rgba(255, 159, 64, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'top' },
+                        tooltip: { callbacks: { label: context => `${context.label}: ${context.raw} items` } }
+                    }
+                }
+            });
+        }
 
         async function fetchAllData() {
-            const data = await fetchJSON('items.json');
-            if (!data) return [];
+            const itemsData = await fetchJSON('items.json');
+            const sourcesData = await fetchJSON('sources.json');
 
-            const hitsData = Object.keys(data).map(timestamp => {
-                const categories = data[timestamp];
+            if (!itemsData || !sourcesData) return [];
+
+            const hitsData = Object.keys(itemsData).map(timestamp => {
+                const categories = itemsData[timestamp];
                 return {
                     timestamp: parseInt(timestamp),
                     dataset: categories['dataset'],
@@ -164,7 +280,7 @@
                     publication: categories['publication'],
                     workflow: categories['workflow'],
                     toolOrService: categories['tool-or-service'],
-                    total: (categories['dataset']+categories['training-material']+categories['publication']+categories['workflow']+categories['tool-or-service'])
+                    total: (categories['dataset'] + categories['training-material'] + categories['publication'] + categories['workflow'] + categories['tool-or-service'])
                 };
             });
 
@@ -176,6 +292,19 @@
 
             // Populate table with the differences from the latest data point
             populateTable(hitsData[hitsData.length - 1], changes1Day, changes7Day, changes30Day);
+
+            // Calculate total items from the latest entry in items.json
+            const totalItems = hitsData[hitsData.length - 1].total;
+
+            // Calculate total items from all sources in sources.json
+            const totalSourceItems = Object.values(sourcesData).reduce((sum, count) => sum + count, 0);
+
+            // Calculate "User-created items" (items without a source)
+            const userCreatedItems = totalItems - totalSourceItems;
+
+            // Populate the source table and render the pie chart
+            populateSourceTable(sourcesData, userCreatedItems);
+            renderPieChart(sourcesData, userCreatedItems);
 
             return hitsData;
         }
