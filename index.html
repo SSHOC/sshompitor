@@ -1,132 +1,66 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hits Over Time</title>
+<script>
+    // Calculate the change from the latest data point
+    function calculateDifference(data, days) {
+        const SECONDS_IN_A_DAY = days * 24 * 60 * 60;  // Number of seconds in the given number of days
+        const latest = data[data.length - 1];  // Most recent data point
+        const targetTimestamp = latest.timestamp - SECONDS_IN_A_DAY;  // Target timestamp X days before the latest
 
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-    <!-- Chart.js adapter for date-fns to handle time scales -->
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
-
-    <!-- date-fns for date formatting -->
-    <script src="https://cdn.jsdelivr.net/npm/date-fns@4.1.0/cdn.min.js"></script>
-
-    <style>
-        #container {
-            display: flex;
-            justify-content: space-between;
+        // Find the closest data point that is before or equal to the target timestamp
+        let target = null;
+        for (let i = data.length - 1; i >= 0; i--) {
+            if (data[i].timestamp <= targetTimestamp) {
+                target = data[i];
+                break;
+            }
         }
 
-        #chartContainer {
-            width: 60%;
-            height: 50vh;
-        }
-        canvas {
-            width: 100% !important;
-            height: 100% !important;
-        }
+        if (!target) return null;  // If no data exists for that time frame
 
-        #dataTable {
-            width: 35%;
-            border-collapse: collapse;
-        }
+        // Calculate the total dynamically based on the fields
+        const latestTotal = latest.dataset + latest.trainingMaterial + latest.publication + latest.workflow + latest.toolOrService;
+        const targetTotal = target.dataset + target.trainingMaterial + target.publication + target.workflow + target.toolOrService;
 
-        #dataTable th, #dataTable td {
-            border: 1px solid black;
-            padding: 8px;
-            text-align: left;
-        }
+        return {
+            dataset: latest.dataset - target.dataset,
+            trainingMaterial: latest.trainingMaterial - target.trainingMaterial,
+            publication: latest.publication - target.publication,
+            workflow: latest.workflow - target.workflow,
+            toolOrService: latest.toolOrService - target.toolOrService,
+            total: latestTotal - targetTotal  // Calculate the difference in total
+        };
+    }
 
-        #dataTable th {
-            background-color: #f2f2f2;
-        }
+    // Populate the table with changes
+    function populateTable(latest, changes1Day, changes7Day, changes30Day) {
+        const tableBody = document.querySelector('#dataTable tbody');
+        tableBody.innerHTML = '';  // Clear existing rows
 
-        /* Green for positive changes, red for negative */
-        .positive {
-            background-color: #c8e6c9; /* light green */
-        }
+        const metrics = ['dataset', 'trainingMaterial', 'publication', 'workflow', 'toolOrService', 'total'];
+        const labels = ['Dataset', 'Training Material', 'Publication', 'Workflow', 'Tool or Service', 'Total'];
 
-        .negative {
-            background-color: #ffcdd2; /* light red */
-        }
+        metrics.forEach((metric, index) => {
+            const row = document.createElement('tr');
+            const labelCell = document.createElement('td');
+            labelCell.textContent = labels[index];
 
-        #sourcePieContainer {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 30px;
-        }
+            const createCell = (change, value) => {
+                const cell = document.createElement('td');
+                if (change === null) {
+                    cell.textContent = 'N/A';
+                } else {
+                    cell.textContent = value !== undefined ? value : change;
+                    cell.className = change > 0 ? 'positive' : (change < 0 ? 'negative' : '');
+                }
+                return cell;
+            };
 
-        #pieChartContainer {
-            width: 45%;
-        }
+            row.appendChild(labelCell);
+            row.appendChild(createCell(changes1Day ? changes1Day[metric] : null));
+            row.appendChild(createCell(changes7Day ? changes7Day[metric] : null));
+            row.appendChild(createCell(changes30Day ? changes30Day[metric] : null));
 
-        #sourceDataTable {
-            width: 50%;
-            border-collapse: collapse;
-        }
-
-        #sourceDataTable th, #sourceDataTable td {
-            border: 1px solid black;
-            padding: 8px;
-            text-align: left;
-        }
-
-        #sourceDataTable th {
-            background-color: #f2f2f2;
-        }
-    </style>
-</head>
-<body>
-    <h1>Total number of items in the SSHOMP</h1>
-
-    <div id="container">
-        <div id="chartContainer">
-            <canvas id="hitsChart"></canvas>
-        </div>
-
-        <table id="dataTable">
-            <caption>Change in items (1-day, 7-day, 30-day)</caption>
-            <thead>
-                <tr>
-                    <th>Metric</th>
-                    <th>1-day</th>
-                    <th>7-day</th>
-                    <th>30-day</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
-    </div>
-
-    <!-- New Pie Chart and Table Section -->
-    <div id="sourcePieContainer">
-        <div id="pieChartContainer">
-            <canvas id="sourcePieChart"></canvas>
-        </div>
-
-        <table id="sourceDataTable">
-            <caption>Items per Source</caption>
-            <thead>
-                <tr>
-                    <th>Source</th>
-                    <th>Items</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
-    </div>
-
-    <script>
-    async function fetchJSON(file) {
-        const response = await fetch(file);
-        if (!response.ok) {
-            console.error("Error fetching " + file);
-            return null;
-        }
-        return await response.json();
+            tableBody.appendChild(row);
+        });
     }
 
     // Populate the source table
@@ -206,6 +140,81 @@
         });
     }
 
+    function renderChart(data) {
+        const ctx = document.getElementById('hitsChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.map(d => new Date(d.timestamp * 1000)),
+                datasets: [
+                    {
+                        label: 'Total Hits',
+                        data: data.map(d => d.total),
+                        borderColor: 'rgba(0, 0, 0, 1)',
+                        backgroundColor: 'rgba(0, 0, 0, 0.1)',
+                        fill: true,
+                        tension: 0.1
+                    },
+                    {
+                        label: 'Dataset',
+                        data: data.map(d => d.dataset),
+                        borderColor: 'rgba(17, 159, 4, 1)',
+                        backgroundColor: 'rgba(17, 159, 4, 0.1)',
+                        fill: true,
+                        tension: 0.1
+                    },
+                    {
+                        label: 'Training Material',
+                        data: data.map(d => d.trainingMaterial),
+                        borderColor: 'rgba(235, 220, 0, 1)',
+                        backgroundColor: 'rgba(235, 220, 0, 0.1)',
+                        fill: true,
+                        tension: 0.1
+                    },
+                    {
+                        label: 'Publication',
+                        data: data.map(d => d.publication),
+                        borderColor: 'rgba(200, 0, 0, 1)',
+                        backgroundColor: 'rgba(200, 0, 0, 0.1)',
+                        fill: true,
+                        tension: 0.1
+                    },
+                    {
+                        label: 'Workflow',
+                        data: data.map(d => d.workflow),
+                        borderColor: 'rgba(139, 0, 230, 0.8)',
+                        backgroundColor: 'rgba(139, 0, 230, 0.1)',
+                        fill: true,
+                        tension: 0.1
+                    },
+                    {
+                        label: 'Tool or Service',
+                        data: data.map(d => d.toolOrService),
+                        borderColor: 'rgba(16, 0, 255, 1)',
+                        backgroundColor: 'rgba(16, 0, 255, 0.1)',
+                        fill: true,
+                        tension: 0.1
+                    }
+                ]
+            },
+            options: {
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: { unit: 'day', stepSize: 1, tooltipFormat: 'PPpp' },
+                        title: { display: true, text: 'Date' }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'Total Number of Items' }
+                    }
+                },
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+    }
+
     async function fetchAllData() {
         const itemsData = await fetchJSON('items.json');
         const sourcesData = await fetchJSON('sources.json');
@@ -252,5 +261,3 @@
 
     fetchAllData().then(renderChart);
 </script>
-</body>
-</html>
