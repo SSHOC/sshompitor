@@ -74,8 +74,7 @@ jobs:
             fi
           done
 
-          # Close the sources and JSON structure
-          echo "}}" >> $GITHUB_WORKSPACE/data/items.json
+          # Close the sources object and JSON structure
           echo "}}" >> $GITHUB_WORKSPACE/data/items.json
 
       - name: Commit and push data
