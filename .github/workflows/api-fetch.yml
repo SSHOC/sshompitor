@@ -59,6 +59,7 @@ jobs:
           SOURCES_RESPONSE=$(curl -s "https://marketplace-api.sshopencloud.eu/api/sources")
           # Extract the sources using jq
           SOURCE_IDS=$(echo $SOURCES_RESPONSE | jq -r '.sources[] | .id')
+          SOURCE_LABEL=$(echo $SOURCES_RESPONSE | jq -r '.sources[] | .label')
 
           # Initialize the hits JSON structure for sources
           echo "{\"$TIMESTAMP\": {" > $GITHUB_WORKSPACE/data/sources.json
@@ -71,7 +72,6 @@ jobs:
             # Fetch the source-specific items and hits
             SOURCE_RESPONSE=$(curl -s "https://marketplace-api.sshopencloud.eu/api/sources/$SOURCE_ID/items")
             SOURCE_HITS=$(echo $SOURCE_RESPONSE | jq -r '.hits')
-            SOURCE_LABEL=$(echo $SOURCE_RESPONSE | jq -r '.label')
 
             # Append the source hits to the JSON file
             if [ "$FIRST_SOURCE" = true ]; then
