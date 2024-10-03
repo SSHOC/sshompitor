@@ -30,7 +30,8 @@ jobs:
           # Create a directory for storing data
           mkdir -p $GITHUB_WORKSPACE/data
 
-          # Initialize the hits JSON structure
+          #### Handling category hits ####
+          # Initialize the hits JSON structure for categories
           echo "{\"$TIMESTAMP\": {" > $GITHUB_WORKSPACE/data/items.json
 
           # Iterate over the categories and query the corresponding API
@@ -50,15 +51,21 @@ jobs:
             fi
           done
 
+          # Close the JSON structure for categories
+          echo "}}" >> $GITHUB_WORKSPACE/data/items.json
+
+          #### Handling source hits ####
           # Query the list of sources from the API
           SOURCES_RESPONSE=$(curl -s "https://marketplace-api.sshopencloud.eu/api/sources")
           # Extract the sources using jq
           SOURCE_IDS=$(echo $SOURCES_RESPONSE | jq -r '.sources[] | .id')
 
+          # Initialize the hits JSON structure for sources
+          echo "{\"$TIMESTAMP\": {" > $GITHUB_WORKSPACE/data/sources.json
+          
           # Initialize the first source entry flag
           FIRST_SOURCE=true
-          echo ", \"sources\": {" >> $GITHUB_WORKSPACE/data/items.json
-          
+
           # Iterate over the source IDs and query their hits
           for SOURCE_ID in $SOURCE_IDS; do
             SOURCE_RESPONSE=$(curl -s "https://marketplace-api.sshopencloud.eu/api/sources/$SOURCE_ID")
@@ -67,17 +74,17 @@ jobs:
 
             # Append the source hits to the JSON file
             if [ "$FIRST_SOURCE" = true ]; then
-              echo "\"$SOURCE_LABEL\": $SOURCE_HITS" >> $GITHUB_WORKSPACE/data/items.json
+              echo "\"$SOURCE_LABEL\": $SOURCE_HITS" >> $GITHUB_WORKSPACE/data/sources.json
               FIRST_SOURCE=false
             else
-              echo ", \"$SOURCE_LABEL\": $SOURCE_HITS" >> $GITHUB_WORKSPACE/data/items.json
+              echo ", \"$SOURCE_LABEL\": $SOURCE_HITS" >> $GITHUB_WORKSPACE/data/sources.json
             fi
           done
 
-          # Close the sources object and JSON structure
-          echo "}}" >> $GITHUB_WORKSPACE/data/items.json
+          # Close the JSON structure for sources
+          echo "}}" >> $GITHUB_WORKSPACE/data/sources.json
 
-      - name: Commit and push data
+      - name: Commit and push category hits to items.json
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
@@ -102,6 +109,35 @@ jobs:
           # Add and commit the updated items.json
           git add items.json
           git commit -m "Add new hits count at $(date)" || exit 0  # No commit if no changes
+
+          # Push the changes to the remote repository
+          git push https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
+
+      - name: Commit and push source hits to sources.json
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Pull the latest changes from the remote without rebase to avoid conflicts
+          git pull --no-rebase https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
+
+          # Check if sources.json exists, if not initialize it as an empty JSON object
+          if [ ! -f sources.json ]; then
+            echo "{}" > sources.json
+          fi
+
+          # Append the new source hits data to sources.json using jq
+          jq -s '.[0] * .[1]' $GITHUB_WORKSPACE/data/sources.json sources.json > $GITHUB_WORKSPACE/data/merged_sources.json
+
+          # Replace sources.json with the merged content
+          mv $GITHUB_WORKSPACE/data/merged_sources.json sources.json
+
+          # Ensure data/sources.json is not being tracked
+          git rm --cached $GITHUB_WORKSPACE/data/sources.json || true
+
+          # Add and commit the updated sources.json
+          git add sources.json
+          git commit -m "Add new source hits count at $(date)" || exit 0  # No commit if no changes
 
           # Push the changes to the remote repository
           git push https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
