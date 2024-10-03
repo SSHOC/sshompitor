@@ -68,7 +68,7 @@ jobs:
 
           # Iterate over the source IDs and query their hits
           for SOURCE_ID in $SOURCE_IDS; do
-            SOURCE_RESPONSE=$(curl -s "https://marketplace-api.sshopencloud.eu/api/sources/$SOURCE_ID")
+            SOURCE_RESPONSE=$(curl -s "https://marketplace-api.sshopencloud.eu/api/sources/$SOURCE_ID/items") 
             SOURCE_HITS=$(echo $SOURCE_RESPONSE | jq -r '.hits')
             SOURCE_LABEL=$(echo $SOURCE_RESPONSE | jq -r '.label')
 
