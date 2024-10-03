@@ -77,6 +77,14 @@
     </div>
 
     <script>
+         async function fetchJSON(file) {
+            const response = await fetch(file);
+            if (!response.ok) {
+                console.error("Error fetching " + file);
+                return null;
+            }
+            return await response.json();
+        }
     // Calculate the change from the latest data point
     function calculateDifference(data, days) {
         const SECONDS_IN_A_DAY = days * 24 * 60 * 60;  // Number of seconds in the given number of days
