@@ -59,7 +59,6 @@ jobs:
           SOURCES_RESPONSE=$(curl -s "https://marketplace-api.sshopencloud.eu/api/sources")
           # Extract the sources using jq
           SOURCE_IDS=$(echo $SOURCES_RESPONSE | jq -r '.sources[] | .id')
-          SOURCE_LABEL=$(echo -E $SOURCES_RESPONSE | jq -r '.sources[] | .label')
 
           # Initialize the hits JSON structure for sources
           echo "{\"$TIMESTAMP\": {" > $GITHUB_WORKSPACE/data/sources.json
@@ -72,13 +71,19 @@ jobs:
             # Fetch the source-specific items and hits
             SOURCE_RESPONSE=$(curl -s "https://marketplace-api.sshopencloud.eu/api/sources/$SOURCE_ID/items")
             SOURCE_HITS=$(echo $SOURCE_RESPONSE | jq -r '.hits')
+            
+            # Fetch the source label and sanitize it by escaping any invalid characters
+            SOURCE_LABEL=$(curl -s "https://marketplace-api.sshopencloud.eu/api/sources" | jq -r --arg id "$SOURCE_ID" '.sources[] | select(.id == ($id|tonumber)) | .label // "Unknown Source"')
 
-            # Append the source hits to the JSON file
+            # Escape special characters in the label
+            SAFE_LABEL=$(echo "$SOURCE_LABEL" | sed 's/[^[:print:]]//g')
+
+            # Append the source hits to the JSON file, skipping invalid labels
             if [ "$FIRST_SOURCE" = true ]; then
-              echo "\"$SOURCE_LABEL\": $SOURCE_HITS" >> $GITHUB_WORKSPACE/data/sources.json
+              echo "\"$SAFE_LABEL\": $SOURCE_HITS" >> $GITHUB_WORKSPACE/data/sources.json
               FIRST_SOURCE=false
             else
-              echo ", \"$SOURCE_LABEL\": $SOURCE_HITS" >> $GITHUB_WORKSPACE/data/sources.json
+              echo ", \"$SAFE_LABEL\": $SOURCE_HITS" >> $GITHUB_WORKSPACE/data/sources.json
             fi
           done
 
