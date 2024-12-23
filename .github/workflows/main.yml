@@ -1,0 +1,72 @@
+name: Fetch Items from Categories Daily
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Runs daily at midnight UTC
+  workflow_dispatch:
+
+jobs:
+  fetch-items:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout repository
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Step 2: Set up Python environment
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      # Step 3: Install dependencies
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      # Step 4: Run Python script to fetch items
+      - name: Fetch items from API
+        env:
+          API_BASE_URL: https://marketplace-api.sshopencloud.eu/api
+          OUTPUT_DIR: ./category_data
+          TIMESTAMP: $(date +'%Y%m%d-%H%M%S')
+        run: |
+          mkdir -p $OUTPUT_DIR
+          python - <<EOF
+          import os
+          import requests
+          from datetime import datetime
+
+          API_BASE_URL = os.getenv("API_BASE_URL")
+          OUTPUT_DIR = os.getenv("OUTPUT_DIR")
+          TIMESTAMP = os.getenv("TIMESTAMP")
+
+          categories = ["workflows", "tools-services", "datasets", "training-materials", "publications"]
+
+          for category in categories:
+              url = f"{API_BASE_URL}/{category}"
+              params = {"page": 1, "perpage": 100}
+              results = []
+              while True:
+                  response = requests.get(url, params=params)
+                  response.raise_for_status()
+                  data = response.json()
+                  results.extend(data.get("items", []))
+                  if len(data.get("items", [])) < params["perpage"]:
+                      break
+                  params["page"] += 1
+              output_file = os.path.join(OUTPUT_DIR, f"{category}_{TIMESTAMP}.json")
+              with open(output_file, "w") as f:
+                  import json
+                  json.dump(results, f, indent=2)
+          print(f"Data saved in {OUTPUT_DIR}")
+          EOF
+
+      # Step 5: Upload results as artifact
+      - name: Upload JSON files
+        uses: actions/upload-artifact@v3
+        with:
+          name: category-data-${{ github.run_id }}
+          path: ./category_data
