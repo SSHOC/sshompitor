@@ -26,22 +26,30 @@ jobs:
             ["workflow"]="https://marketplace-api.sshopencloud.eu/api/item-search?categories=workflow&advanced=false&includeSteps=false"
           )
 
-          echo "{\"$TIMESTAMP\": {" > $GITHUB_WORKSPACE/data/full_items.json
           echo "{\"$TIMESTAMP\": {" > $GITHUB_WORKSPACE/data/items.json
           CATEGORY_ZERO_HITS=true
-          FIRST=true
+          FIRST_ITEM=true
+
+          TMP_FULL="$GITHUB_WORKSPACE/data/full_items_body.json"
+          echo "{" > "$TMP_FULL"
+          FIRST_FULL=true
 
           for CATEGORY in "${!ENDPOINTS[@]}"; do
             RESPONSE=$(curl -s "${ENDPOINTS[$CATEGORY]}")
-            echo "\"$CATEGORY\": $RESPONSE" >> $GITHUB_WORKSPACE/data/full_items.json
             HITS=$(echo "$RESPONSE" | jq -r '.hits // 0')
 
-            if [ "$FIRST" = true ]; then
+            if [ "$FIRST_ITEM" = true ]; then
               echo "\"$CATEGORY\": $HITS" >> $GITHUB_WORKSPACE/data/items.json
-              FIRST=false
+              FIRST_ITEM=false
             else
               echo ", \"$CATEGORY\": $HITS" >> $GITHUB_WORKSPACE/data/items.json
-              echo ", \"$CATEGORY\": $RESPONSE" >> $GITHUB_WORKSPACE/data/full_items.json
+            fi
+
+            if [ "$FIRST_FULL" = true ]; then
+              echo "\"$CATEGORY\": $RESPONSE" >> "$TMP_FULL"
+              FIRST_FULL=false
+            else
+              echo ", \"$CATEGORY\": $RESPONSE" >> "$TMP_FULL"
             fi
 
             if [ "$HITS" -gt 0 ]; then
@@ -50,13 +58,15 @@ jobs:
           done
 
           echo "}}" >> $GITHUB_WORKSPACE/data/items.json
-          echo "}}" >> $GITHUB_WORKSPACE/data/full_items.json
+          echo "}" >> "$TMP_FULL"
+          jq -n --arg ts "$TIMESTAMP" --slurpfile data "$TMP_FULL" '{($ts): $data[0]}' > $GITHUB_WORKSPACE/data/full_items.json
 
           if [ "$CATEGORY_ZERO_HITS" = true ]; then
             echo "All category hits returned 0. API might be down. Skipping this run."
             exit 0
           fi
 
+          #### Sources ####
           SOURCES_RESPONSE=$(curl -s "https://marketplace-api.sshopencloud.eu/api/sources")
           echo "{\"$TIMESTAMP\": $SOURCES_RESPONSE}" > $GITHUB_WORKSPACE/data/full_sources.json
           SOURCE_IDS=$(echo $SOURCES_RESPONSE | jq -r '.sources[] | .id')
