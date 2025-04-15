@@ -49,11 +49,10 @@ jobs:
               ALL_ITEMS=$(jq -c --argjson new "$PAGE_ITEMS" '.items += $new' <<< "$ALL_ITEMS")
             done
 
-            # Combine metadata and items to mimic full response
-            RESPONSE=$(jq -n \
-              --argjson metadata "$(echo "$FIRST_PAGE" | jq 'del(.items)')" \
-              --argjson items "$(echo "$ALL_ITEMS" | jq '.items')" \
-              '$metadata + {items: $items}')
+            # Write to files and combine with jq to avoid arg size limit
+            echo "$FIRST_PAGE" | jq 'del(.items)' > /tmp/metadata.json
+            echo "$ALL_ITEMS" | jq '.items' > /tmp/items.json
+            RESPONSE=$(jq -s '.[0] + {items: .[1]}' /tmp/metadata.json /tmp/items.json)
 
             if [ "$FIRST_ITEM" = true ]; then
               echo "\"$CATEGORY\": $HITS" >> $GITHUB_WORKSPACE/data/items.json
@@ -166,4 +165,3 @@ jobs:
           git add "$FILE_NAME"
           git commit -m "Add full API snapshot for $TIMESTAMP" || exit 0
           git push https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
-
