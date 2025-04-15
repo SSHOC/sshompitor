@@ -41,18 +41,29 @@ jobs:
             TOTAL_PAGES=$(echo "$FIRST_PAGE" | jq -r '.pages // 1')
             HITS=$(echo "$FIRST_PAGE" | jq -r '.hits // 0')
 
-            # Start with items from page 1
-            ALL_ITEMS=$(echo "$FIRST_PAGE" | jq -c '{items: .items}')
+            # Prepare temp files
+            TMP_DIR="/tmp/category_${CATEGORY}_$RANDOM"
+            mkdir -p "$TMP_DIR"
+            ITEMS_FILE="$TMP_DIR/items.json"
+            METADATA_FILE="$TMP_DIR/meta.json"
+            
+            # Write metadata from first page
+            echo "$FIRST_PAGE" | jq 'del(.items)' > "$METADATA_FILE"
+            
+            # Start writing items array manually
+            echo "[" > "$ITEMS_FILE"
+            echo "$FIRST_PAGE" | jq -c '.items[]' >> "$ITEMS_FILE"
+            
+            # Loop through remaining pages and append items
             for ((i = 2; i <= TOTAL_PAGES; i++)); do
-              PAGE_DATA=$(curl -s "${BASE_URL}&page=${i}")
-              PAGE_ITEMS=$(echo "$PAGE_DATA" | jq -c '.items')
-              ALL_ITEMS=$(jq -c --argjson new "$PAGE_ITEMS" '.items += $new' <<< "$ALL_ITEMS")
+              curl -s "${BASE_URL}&page=${i}" | jq -c '.items[]' >> "$ITEMS_FILE"
             done
-
-            # Write to files and combine with jq to avoid arg size limit
-            echo "$FIRST_PAGE" | jq 'del(.items)' > /tmp/metadata.json
-            echo "$ALL_ITEMS" | jq '.items' > /tmp/items.json
-            RESPONSE=$(jq -s '.[0] + {items: .[1]}' /tmp/metadata.json /tmp/items.json)
+            
+            # Close the array
+            echo "]" >> "$ITEMS_FILE"
+            
+            # Safely merge metadata and items into full response
+            RESPONSE=$(jq -s '.[0] + {items: .[1]}' "$METADATA_FILE" "$ITEMS_FILE")
 
             if [ "$FIRST_ITEM" = true ]; then
               echo "\"$CATEGORY\": $HITS" >> $GITHUB_WORKSPACE/data/items.json
