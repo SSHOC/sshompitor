@@ -26,6 +26,14 @@ jobs:
             ["workflows"]="https://marketplace-api.sshopencloud.eu/api/workflows"
           )
 
+          declare -A RESPONSE_KEYS=(
+            ["tools-services"]="toolsServices"
+            ["training-materials"]="trainingMaterials"
+            ["publications"]="publications"
+            ["datasets"]="datasets"
+            ["workflows"]="workflows"
+          )
+
           echo "{\"$TIMESTAMP\": {" > $GITHUB_WORKSPACE/data/items.json
           CATEGORY_ZERO_HITS=true
           FIRST_ITEM=true
@@ -36,22 +44,22 @@ jobs:
 
           for CATEGORY in "${!ENDPOINTS[@]}"; do
             BASE_URL="${ENDPOINTS[$CATEGORY]}"
+            RESPONSE_KEY="${RESPONSE_KEYS[$CATEGORY]}"
 
             FIRST_PAGE=$(curl -s "${BASE_URL}?page=1")
             TOTAL_PAGES=$(echo "$FIRST_PAGE" | jq -r '.pages // 1')
             HITS=$(echo "$FIRST_PAGE" | jq -r '.hits // 0')
 
-            # Prepare temp files for this category
             TMP_DIR="/tmp/category_${CATEGORY}_$RANDOM"
             mkdir -p "$TMP_DIR"
             ITEMS_FILE="$TMP_DIR/items.json"
             METADATA_FILE="$TMP_DIR/meta.json"
 
-            echo "$FIRST_PAGE" | jq 'del(.items)' > "$METADATA_FILE"
+            echo "$FIRST_PAGE" | jq "del(.${RESPONSE_KEY})" > "$METADATA_FILE"
             echo "[" > "$ITEMS_FILE"
 
             FIRST=true
-            echo "$FIRST_PAGE" | jq -c '.items[]' | while IFS= read -r item; do
+            echo "$FIRST_PAGE" | jq -c ".${RESPONSE_KEY}[]" | while IFS= read -r item; do
               if [ "$FIRST" = true ]; then
                 echo "$item" >> "$ITEMS_FILE"
                 FIRST=false
@@ -62,7 +70,8 @@ jobs:
             done
 
             for ((i = 2; i <= TOTAL_PAGES; i++)); do
-              PAGE_ITEMS=$(curl -s "${BASE_URL}?page=${i}" | jq -c '.items[]')
+              PAGE_DATA=$(curl -s "${BASE_URL}?page=${i}")
+              PAGE_ITEMS=$(echo "$PAGE_DATA" | jq -c ".${RESPONSE_KEY}[]")
               while IFS= read -r item; do
                 echo "," >> "$ITEMS_FILE"
                 echo "$item" >> "$ITEMS_FILE"
