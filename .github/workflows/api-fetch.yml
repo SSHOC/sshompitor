@@ -19,11 +19,11 @@ jobs:
           mkdir -p $GITHUB_WORKSPACE/data
 
           declare -A ENDPOINTS=(
-            ["tool-or-service"]="https://marketplace-api.sshopencloud.eu/api/item-search?categories=tool-or-service&advanced=false&includeSteps=false"
-            ["training-material"]="https://marketplace-api.sshopencloud.eu/api/item-search?categories=training-material&advanced=false&includeSteps=false"
-            ["publication"]="https://marketplace-api.sshopencloud.eu/api/item-search?categories=publication&advanced=false&includeSteps=false"
-            ["dataset"]="https://marketplace-api.sshopencloud.eu/api/item-search?categories=dataset&advanced=false&includeSteps=false"
-            ["workflow"]="https://marketplace-api.sshopencloud.eu/api/item-search?categories=workflow&advanced=false&includeSteps=false"
+            ["tools-services"]="https://marketplace-api.sshopencloud.eu/api/tools-services"
+            ["training-materials"]="https://marketplace-api.sshopencloud.eu/api/training-materials"
+            ["publications"]="https://marketplace-api.sshopencloud.eu/api/publications"
+            ["datasets"]="https://marketplace-api.sshopencloud.eu/api/datasets"
+            ["workflows"]="https://marketplace-api.sshopencloud.eu/api/workflows"
           )
 
           echo "{\"$TIMESTAMP\": {" > $GITHUB_WORKSPACE/data/items.json
@@ -37,7 +37,7 @@ jobs:
           for CATEGORY in "${!ENDPOINTS[@]}"; do
             BASE_URL="${ENDPOINTS[$CATEGORY]}"
 
-            FIRST_PAGE=$(curl -s "${BASE_URL}&page=1")
+            FIRST_PAGE=$(curl -s "${BASE_URL}?page=1")
             TOTAL_PAGES=$(echo "$FIRST_PAGE" | jq -r '.pages // 1')
             HITS=$(echo "$FIRST_PAGE" | jq -r '.hits // 0')
 
@@ -47,13 +47,9 @@ jobs:
             ITEMS_FILE="$TMP_DIR/items.json"
             METADATA_FILE="$TMP_DIR/meta.json"
 
-            # Save metadata (no items)
             echo "$FIRST_PAGE" | jq 'del(.items)' > "$METADATA_FILE"
-
-            # Start building items array
             echo "[" > "$ITEMS_FILE"
 
-            # First page items
             FIRST=true
             echo "$FIRST_PAGE" | jq -c '.items[]' | while IFS= read -r item; do
               if [ "$FIRST" = true ]; then
@@ -65,19 +61,16 @@ jobs:
               fi
             done
 
-            # Remaining pages
             for ((i = 2; i <= TOTAL_PAGES; i++)); do
-              PAGE_ITEMS=$(curl -s "${BASE_URL}&page=${i}" | jq -c '.items[]')
+              PAGE_ITEMS=$(curl -s "${BASE_URL}?page=${i}" | jq -c '.items[]')
               while IFS= read -r item; do
                 echo "," >> "$ITEMS_FILE"
                 echo "$item" >> "$ITEMS_FILE"
               done <<< "$PAGE_ITEMS"
             done
 
-            # Close array
             echo "]" >> "$ITEMS_FILE"
 
-            # Merge into full response
             RESPONSE=$(jq -s '.[0] + {items: .[1]}' "$METADATA_FILE" "$ITEMS_FILE")
 
             if [ "$FIRST_ITEM" = true ]; then
