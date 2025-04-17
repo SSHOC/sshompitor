@@ -27,7 +27,7 @@ jobs:
           )
 
           declare -A RESPONSE_KEYS=(
-            ["tools-services"]="toolsServices"
+            ["tools-services"]="tools"
             ["training-materials"]="trainingMaterials"
             ["publications"]="publications"
             ["datasets"]="datasets"
