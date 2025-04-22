@@ -362,12 +362,13 @@ async function fetchAllData() {
             const categories = itemsData[timestamp];
             return {
                 timestamp: parseInt(timestamp),
-                dataset: categories['dataset'],
-                trainingMaterial: categories['training-material'],
-                publication: categories['publication'],
-                workflow: categories['workflow'],
-                toolOrService: categories['tool-or-service'],
-                total: (categories['dataset'] + categories['training-material'] + categories['publication'] + categories['workflow'] + categories['tool-or-service'])
+                dataset: categories['datasets'],
+                trainingMaterial: categories['training-materials'],
+                publication: categories['publications'],
+                workflow: categories['workflows'],
+                toolOrService: categories['tools-services'],
+                total: (categories['datasets'] + categories['training-materials'] + categories['publications'] + categories['workflows'] + categories['tools-services'])
+
             };
         });
 
