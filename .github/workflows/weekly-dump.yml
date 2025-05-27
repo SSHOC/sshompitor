@@ -1,0 +1,103 @@
+name: Weekly Full API Dump
+
+on:
+  schedule:
+    - cron: "0 2 * * 0"  # Every Sunday at 02:00
+  workflow_dispatch:
+
+jobs:
+  fetch_full_api_dump:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Fetch full paginated data for all categories
+        run: |
+          TIMESTAMP=$(date +%s)
+          mkdir -p $GITHUB_WORKSPACE/data
+
+          declare -A ENDPOINTS=(
+            ["tools-services"]="https://marketplace-api.sshopencloud.eu/api/tools-services"
+            ["training-materials"]="https://marketplace-api.sshopencloud.eu/api/training-materials"
+            ["publications"]="https://marketplace-api.sshopencloud.eu/api/publications"
+            ["datasets"]="https://marketplace-api.sshopencloud.eu/api/datasets"
+            ["workflows"]="https://marketplace-api.sshopencloud.eu/api/workflows"
+          )
+
+          declare -A RESPONSE_KEYS=(
+            ["tools-services"]="toolsServices"
+            ["training-materials"]="trainingMaterials"
+            ["publications"]="publications"
+            ["datasets"]="datasets"
+            ["workflows"]="workflows"
+          )
+
+          TMP_FULL="$GITHUB_WORKSPACE/data/full_items_body.json"
+          echo "{" > "$TMP_FULL"
+          FIRST_FULL=true
+
+          for CATEGORY in "${!ENDPOINTS[@]}"; do
+            BASE_URL="${ENDPOINTS[$CATEGORY]}"
+            RESPONSE_KEY="${RESPONSE_KEYS[$CATEGORY]}"
+
+            FIRST_PAGE=$(curl -s "${BASE_URL}?page=1")
+            TOTAL_PAGES=$(echo "$FIRST_PAGE" | jq -r '.pages // 1')
+
+            TMP_DIR="/tmp/category_${CATEGORY}_$RANDOM"
+            mkdir -p "$TMP_DIR"
+            ITEMS_FILE="$TMP_DIR/items.json"
+            METADATA_FILE="$TMP_DIR/meta.json"
+
+            echo "$FIRST_PAGE" | jq "del(.${RESPONSE_KEY})" > "$METADATA_FILE"
+            echo "[" > "$ITEMS_FILE"
+
+            FIRST=true
+            echo "$FIRST_PAGE" | jq -c ".${RESPONSE_KEY}[]" | while IFS= read -r item; do
+              if [ "$FIRST" = true ]; then
+                echo "$item" >> "$ITEMS_FILE"
+                FIRST=false
+              else
+                echo "," >> "$ITEMS_FILE"
+                echo "$item" >> "$ITEMS_FILE"
+              fi
+            done
+
+            for ((i = 2; i <= TOTAL_PAGES; i++)); do
+              PAGE_DATA=$(curl -s "${BASE_URL}?page=${i}")
+              PAGE_ITEMS=$(echo "$PAGE_DATA" | jq -c ".${RESPONSE_KEY}[]")
+              while IFS= read -r item; do
+                echo "," >> "$ITEMS_FILE"
+                echo "$item" >> "$ITEMS_FILE"
+              done <<< "$PAGE_ITEMS"
+            done
+
+            echo "]" >> "$ITEMS_FILE"
+
+            RESPONSE=$(jq -s '.[0] + {items: .[1]}' "$METADATA_FILE" "$ITEMS_FILE")
+
+            if [ "$FIRST_FULL" = true ]; then
+              echo "\"$CATEGORY\": $RESPONSE" >> "$TMP_FULL"
+              FIRST_FULL=false
+            else
+              echo ", \"$CATEGORY\": $RESPONSE" >> "$TMP_FULL"
+            fi
+          done
+
+          echo "}" >> "$TMP_FULL"
+          jq -n --arg ts "$TIMESTAMP" --slurpfile data "$TMP_FULL" '{($ts): $data[0]}' > $GITHUB_WORKSPACE/data/full_items.json
+
+      - name: Commit full_items.json as timestamped snapshot
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --no-rebase https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
+
+          TIMESTAMP=$(jq -r 'keys[0]' $GITHUB_WORKSPACE/data/full_items.json)
+          FILE_NAME="data/full_items_${TIMESTAMP}.json"
+          cp $GITHUB_WORKSPACE/data/full_items.json "$FILE_NAME"
+
+          git add "$FILE_NAME"
+          git commit -m "Add full API snapshot for $TIMESTAMP" || exit 0
+          git push https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
