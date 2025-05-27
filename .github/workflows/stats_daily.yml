@@ -1,0 +1,78 @@
+name: Daily Stats Update
+
+on:
+  schedule:
+    - cron: "0 1 * * *"  # Every day at 01:00
+  workflow_dispatch:
+
+jobs:
+  fetch_lightweight_hits:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Fetch daily summary
+        run: |
+          TIMESTAMP=$(date +%s)
+          mkdir -p $GITHUB_WORKSPACE/data
+
+          declare -A ENDPOINTS=(
+            ["tools-services"]="https://marketplace-api.sshopencloud.eu/api/tools-services"
+            ["training-materials"]="https://marketplace-api.sshopencloud.eu/api/training-materials"
+            ["publications"]="https://marketplace-api.sshopencloud.eu/api/publications"
+            ["datasets"]="https://marketplace-api.sshopencloud.eu/api/datasets"
+            ["workflows"]="https://marketplace-api.sshopencloud.eu/api/workflows"
+          )
+
+          echo "{\"$TIMESTAMP\": {" > $GITHUB_WORKSPACE/data/items.json
+          FIRST=true
+
+          for CATEGORY in "${!ENDPOINTS[@]}"; do
+            HITS=$(curl -s "${ENDPOINTS[$CATEGORY]}?page=1" | jq -r '.hits // 0')
+            if [ "$FIRST" = true ]; then
+              echo "\"$CATEGORY\": $HITS" >> $GITHUB_WORKSPACE/data/items.json
+              FIRST=false
+            else
+              echo ", \"$CATEGORY\": $HITS" >> $GITHUB_WORKSPACE/data/items.json
+            fi
+          done
+          echo "}}" >> $GITHUB_WORKSPACE/data/items.json
+
+          # SOURCES
+          SOURCES_RESPONSE=$(curl -s "https://marketplace-api.sshopencloud.eu/api/sources")
+          SOURCE_IDS=$(echo "$SOURCES_RESPONSE" | jq -r '.sources[] | .id')
+          echo "{\"$TIMESTAMP\": {" > $GITHUB_WORKSPACE/data/sources.json
+          FIRST_SOURCE=true
+
+          for ID in $SOURCE_IDS; do
+            SOURCE_LABEL=$(echo $SOURCES_RESPONSE | jq -r --arg id "$ID" '.sources[] | select(.id == ($id|tonumber)) | .label // "Unknown Source"')
+            SAFE_LABEL=$(echo "$SOURCE_LABEL" | sed 's/[^[:print:]]//g')
+            HITS=$(curl -s "https://marketplace-api.sshopencloud.eu/api/sources/$ID/items" | jq -r '.hits // 0')
+
+            if [ "$FIRST_SOURCE" = true ]; then
+              echo "\"$SAFE_LABEL\": $HITS" >> $GITHUB_WORKSPACE/data/sources.json
+              FIRST_SOURCE=false
+            else
+              echo ", \"$SAFE_LABEL\": $HITS" >> $GITHUB_WORKSPACE/data/sources.json
+            fi
+          done
+          echo "}}" >> $GITHUB_WORKSPACE/data/sources.json
+
+      - name: Commit updated items and sources
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --no-rebase https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
+
+          for FILE in items sources; do
+            [ ! -f "$FILE.json" ] && echo "{}" > "$FILE.json"
+            jq -s '.[0] * .[1]' $GITHUB_WORKSPACE/data/$FILE.json $FILE.json > merged.json
+            mv merged.json $FILE.json
+            git rm --cached $GITHUB_WORKSPACE/data/$FILE.json || true
+            git add $FILE.json
+          done
+
+          git commit -m "Update daily item and source stats at $(date)" || exit 0
+          git push https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
