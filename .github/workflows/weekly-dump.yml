@@ -2,23 +2,23 @@ name: Weekly Full API Dump
 
 on:
   schedule:
-    - cron: '0 3 * * 1'  # Every Monday at 03:00 UTC
+    - cron: '0 3 * * 1'  # Every Monday at 3:00 AM UTC
   workflow_dispatch:
 
 jobs:
-  dump-full-api:
+  collect-full-data:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      - name: Fetch full data and save to full_items.json
+      - name: Fetch and store full API data
         run: |
           TIMESTAMP=$(date +%s)
-          mkdir -p $GITHUB_WORKSPACE/data
+          mkdir -p "$GITHUB_WORKSPACE/data"
 
           declare -A ENDPOINTS=(
             ["tools-services"]="https://marketplace-api.sshopencloud.eu/api/tools-services"
@@ -74,17 +74,18 @@ jobs:
             done
 
             echo "]" >> "$ITEMS_FILE"
-
             RESPONSE=$(jq -s '.[0] + {items: .[1]}' "$METADATA_FILE" "$ITEMS_FILE")
+
             COMBINED_JSON=$(jq --argjson obj "$RESPONSE" --arg key "$CATEGORY" '. + {($key): $obj}' <<< "$COMBINED_JSON")
           done
 
-          jq -n --arg ts "$TIMESTAMP" --argjson data "$COMBINED_JSON" '{($ts): $data}' > $GITHUB_WORKSPACE/data/full_items.json
+          echo "$COMBINED_JSON" > "$GITHUB_WORKSPACE/data/tmp_combined.json"
+          jq -n --arg ts "$TIMESTAMP" --slurpfile data "$GITHUB_WORKSPACE/data/tmp_combined.json" '{($ts): $data[0]}' > "$GITHUB_WORKSPACE/data/full_items.json"
 
-      - name: Commit and push full_items.json
+      - name: Commit full_items.json
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add data/full_items.json
-          git commit -m "Weekly full API dump: $TIMESTAMP" || echo "No changes to commit"
+          git commit -m "Weekly full_items.json update: $(date -u)" || echo "No changes to commit"
           git push
