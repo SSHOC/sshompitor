@@ -2,18 +2,20 @@ name: Weekly Full API Dump
 
 on:
   schedule:
-    - cron: "0 2 * * 0"  # Every Sunday at 02:00
+    - cron: '0 3 * * 1'  # Every Monday at 03:00 UTC
   workflow_dispatch:
 
 jobs:
-  fetch_full_api_dump:
+  dump-full-api:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Fetch full paginated data for all categories
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Fetch full data and save to full_items.json
         run: |
           TIMESTAMP=$(date +%s)
           mkdir -p $GITHUB_WORKSPACE/data
@@ -34,9 +36,7 @@ jobs:
             ["workflows"]="workflows"
           )
 
-          TMP_FULL="$GITHUB_WORKSPACE/data/full_items_body.json"
-          echo "{" > "$TMP_FULL"
-          FIRST_FULL=true
+          COMBINED_JSON=$(jq -n '{}')
 
           for CATEGORY in "${!ENDPOINTS[@]}"; do
             BASE_URL="${ENDPOINTS[$CATEGORY]}"
@@ -76,28 +76,15 @@ jobs:
             echo "]" >> "$ITEMS_FILE"
 
             RESPONSE=$(jq -s '.[0] + {items: .[1]}' "$METADATA_FILE" "$ITEMS_FILE")
-
-            if [ "$FIRST_FULL" = true ]; then
-              echo "\"$CATEGORY\": $RESPONSE" >> "$TMP_FULL"
-              FIRST_FULL=false
-            else
-              echo ", \"$CATEGORY\": $RESPONSE" >> "$TMP_FULL"
-            fi
+            COMBINED_JSON=$(jq --argjson obj "$RESPONSE" --arg key "$CATEGORY" '. + {($key): $obj}' <<< "$COMBINED_JSON")
           done
 
-          echo "}" >> "$TMP_FULL"
-          jq --arg ts "$TIMESTAMP" --argfile data "$TMP_FULL" '{($ts): $data}' > $GITHUB_WORKSPACE/data/full_items.json
+          jq -n --arg ts "$TIMESTAMP" --argjson data "$COMBINED_JSON" '{($ts): $data}' > $GITHUB_WORKSPACE/data/full_items.json
 
-      - name: Commit full_items.json as timestamped snapshot
+      - name: Commit and push full_items.json
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --no-rebase https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
-
-          TIMESTAMP=$(jq -r 'keys[0]' $GITHUB_WORKSPACE/data/full_items.json)
-          FILE_NAME="data/full_items_${TIMESTAMP}.json"
-          cp $GITHUB_WORKSPACE/data/full_items.json "$FILE_NAME"
-
-          git add "$FILE_NAME"
-          git commit -m "Add full API snapshot for $TIMESTAMP" || exit 0
-          git push https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add data/full_items.json
+          git commit -m "Weekly full API dump: $TIMESTAMP" || echo "No changes to commit"
+          git push
