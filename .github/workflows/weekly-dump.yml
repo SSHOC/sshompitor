@@ -36,7 +36,7 @@ jobs:
             ["workflows"]="workflows"
           )
 
-          COMBINED_JSON=$(jq -n '{}')
+          COMBINED_JSON="{}"
 
           for CATEGORY in "${!ENDPOINTS[@]}"; do
             BASE_URL="${ENDPOINTS[$CATEGORY]}"
@@ -76,11 +76,11 @@ jobs:
             echo "]" >> "$ITEMS_FILE"
             RESPONSE=$(jq -s '.[0] + {items: .[1]}' "$METADATA_FILE" "$ITEMS_FILE")
 
-            COMBINED_JSON=$(jq --argjson obj "$RESPONSE" --arg key "$CATEGORY" '. + {($key): $obj}' <<< "$COMBINED_JSON")
+            COMBINED_JSON=$(jq --argjson newData "$RESPONSE" --arg key "$CATEGORY" '. + {($key): $newData}' <<< "$COMBINED_JSON")
           done
 
           echo "$COMBINED_JSON" > "$GITHUB_WORKSPACE/data/tmp_combined.json"
-          jq -n --arg ts "$TIMESTAMP" --slurpfile data "$GITHUB_WORKSPACE/data/tmp_combined.json" '{($ts): $data[0]}' > "$GITHUB_WORKSPACE/data/full_items.json"
+          jq -n --arg ts "$TIMESTAMP" --argfile data "$GITHUB_WORKSPACE/data/tmp_combined.json" '{($ts): $data[0]}' > "$GITHUB_WORKSPACE/data/full_items.json"
 
       - name: Commit full_items.json
         run: |
