@@ -86,7 +86,7 @@ jobs:
           done
 
           echo "}" >> "$TMP_FULL"
-          jq -n --arg ts "$TIMESTAMP" --slurpfile data "$TMP_FULL" '{($ts): $data[0]}' > $GITHUB_WORKSPACE/data/full_items.json
+          jq --arg ts "$TIMESTAMP" --argfile data "$TMP_FULL" '{($ts): $data}' > $GITHUB_WORKSPACE/data/full_items.json
 
       - name: Commit full_items.json as timestamped snapshot
         run: |
