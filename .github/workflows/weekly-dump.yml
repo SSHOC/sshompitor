@@ -36,7 +36,9 @@ jobs:
             ["workflows"]="workflows"
           )
 
-          COMBINED_JSON="{}"
+          TMP_FULL="$GITHUB_WORKSPACE/data/full_items_body.json"
+          echo "{" > "$TMP_FULL"
+          FIRST_FULL=true
 
           for CATEGORY in "${!ENDPOINTS[@]}"; do
             BASE_URL="${ENDPOINTS[$CATEGORY]}"
@@ -74,13 +76,19 @@ jobs:
             done
 
             echo "]" >> "$ITEMS_FILE"
+
             RESPONSE=$(jq -s '.[0] + {items: .[1]}' "$METADATA_FILE" "$ITEMS_FILE")
 
-            COMBINED_JSON=$(jq --argjson newData "$RESPONSE" --arg key "$CATEGORY" '. + {($key): $newData}' <<< "$COMBINED_JSON")
+            if [ "$FIRST_FULL" = true ]; then
+              echo "\"$CATEGORY\": $RESPONSE" >> "$TMP_FULL"
+              FIRST_FULL=false
+            else
+              echo ", \"$CATEGORY\": $RESPONSE" >> "$TMP_FULL"
+            fi
           done
 
-          echo "$COMBINED_JSON" > "$GITHUB_WORKSPACE/data/tmp_combined.json"
-          jq -n --arg ts "$TIMESTAMP" --argfile data "$GITHUB_WORKSPACE/data/tmp_combined.json" '{($ts): $data[0]}' > "$GITHUB_WORKSPACE/data/full_items.json"
+          echo "}" >> "$TMP_FULL"
+          jq -n --arg ts "$TIMESTAMP" --slurpfile data "$TMP_FULL" '{($ts): $data[0]}' > "$GITHUB_WORKSPACE/data/full_items.json"
 
       - name: Commit full_items.json
         run: |
