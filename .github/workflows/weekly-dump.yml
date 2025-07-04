@@ -71,14 +71,21 @@ jobs:
             FULL="$TMPDIR/full.json"
             jq -s '.[0] + {items: .[1]}' "$META" "$ITEMS" > "$FULL"
 
-            # wrap per-category
             CATFILE="$TMPDIR/cat.json"
             jq -n --arg key "$CAT" --argfile data "$FULL" '{($key): $data}' > "$CATFILE"
             FILES+=("$CATFILE")
           done
 
-          # merge all category objects
+          echo "Merging category files: ${FILES[*]}"
           jq -s 'reduce .[] as $o ({}; . * $o)' "${FILES[@]}" > "$OUTDIR/combined.json"
+
+          # validate combined.json
+          if ! jq empty "$OUTDIR/combined.json"; then
+            echo "combined.json is invalid:"
+            cat "$OUTDIR/combined.json"
+            exit 1
+          fi
+
           jq -n --arg ts "$TS" --slurpfile d "$OUTDIR/combined.json" '{($ts): $d[0]}' > "$OUTDIR/full_items.json"
 
       - name: Commit snapshot
