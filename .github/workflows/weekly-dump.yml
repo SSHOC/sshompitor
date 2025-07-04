@@ -80,7 +80,7 @@ jobs:
           # merge all category objects
           jq -s 'reduce .[] as $o ({}; . * $o)' "${FILES[@]}" > "$OUTDIR/combined.json"
           jq -n --arg ts "$TS" --argfile d "$OUTDIR/combined.json" '{($ts): $d}' > "$OUTDIR/full_items.json"
-
+          
       - name: Commit snapshot
         run: |
           git config --global user.name "github-actions[bot]"
