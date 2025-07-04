@@ -2,7 +2,7 @@ name: Weekly Full API Dump
 
 on:
   schedule:
-    - cron: "0 3 * * 1"    # every Monday 03:00 UTC
+    - cron: '0 3 * * 1'  # every Monday 03:00 UTC
   workflow_dispatch:
 
 jobs:
@@ -14,7 +14,7 @@ jobs:
       - name: Install jq
         run: sudo apt-get update -y && sudo apt-get install -y jq
 
-      - name: Fetch paginated data and build JSON
+      - name: Collect full paginated data
         env:
           OUTDIR: ${{ github.workspace }}/data
         run: |
@@ -22,7 +22,6 @@ jobs:
           TS=$(date +%s)
           mkdir -p "$OUTDIR"
 
-          # endpoints and the matching key where items live
           declare -A ENDPOINTS=(
             ["tools-services"]="https://marketplace-api.sshopencloud.eu/api/tools-services"
             ["training-materials"]="https://marketplace-api.sshopencloud.eu/api/training-materials"
@@ -38,8 +37,7 @@ jobs:
             ["workflows"]="workflows"
           )
 
-          COMBINED="$(mktemp)"
-          jq -n '{}' > "$COMBINED"      # start with empty object
+          FILES=()
 
           for CAT in "${!ENDPOINTS[@]}"; do
             BASE=${ENDPOINTS[$CAT]}
@@ -54,42 +52,42 @@ jobs:
 
             echo "$FIRST" | jq "del(.${KEY})" > "$META"
             echo "[" > "$ITEMS"
-
-            # page-1 items
             FIRST_FLAG=true
             echo "$FIRST" | jq -c ".${KEY}[]" | while read -r itm; do
-              $FIRST_FLAG && { echo "$itm" >> "$ITEMS"; FIRST_FLAG=false; } || { echo "," >> "$ITEMS"; echo "$itm" >> "$ITEMS"; }
+              if $FIRST_FLAG; then
+                echo "$itm" >> "$ITEMS"; FIRST_FLAG=false;
+              else
+                echo "," >> "$ITEMS" && echo "$itm" >> "$ITEMS";
+              fi
             done
 
-            # remaining pages
-            for ((p=2; p<=PAGES; p++)); do
+            for ((p=2;p<=PAGES;p++)); do
               curl -s "${BASE}?page=$p" | jq -c ".${KEY}[]" | while read -r itm; do
-                echo "," >> "$ITEMS"
-                echo "$itm" >> "$ITEMS"
+                echo "," >> "$ITEMS" && echo "$itm" >> "$ITEMS";
               done
             done
             echo "]" >> "$ITEMS"
 
-            # merge meta + items
-            FULL=$(mktemp)
+            FULL="$TMPDIR/full.json"
             jq -s '.[0] + {items: .[1]}' "$META" "$ITEMS" > "$FULL"
 
-            # merge into combined file (file-to-file to avoid arg-size limits)
-            jq --argfile cur "$COMBINED" --argfile add "$FULL" --arg k "$CAT" \
-               '($cur + {($k): $add})' > "$COMBINED.tmp" && mv "$COMBINED.tmp" "$COMBINED"
+            # wrap per-category
+            CATFILE="$TMPDIR/cat.json"
+            jq -n --arg key "$CAT" --argfile data "$FULL" '{($key): $data}' > "$CATFILE"
+            FILES+=("$CATFILE")
           done
 
-          # wrap with timestamp key
-          jq -n --arg ts "$TS" --argfile data "$COMBINED" '{($ts): $data}' > "$OUTDIR/full_items.json"
+          # merge all category objects
+          jq -s 'reduce .[] as $o ({}; . * $o)' "${FILES[@]}" > "$OUTDIR/combined.json"
+          jq -n --arg ts "$TS" --argfile d "$OUTDIR/combined.json" '{($ts): $d}' > "$OUTDIR/full_items.json"
 
       - name: Commit snapshot
         run: |
-          git config --global user.name  "github-actions[bot]"
+          git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
           TS=$(jq -r 'keys[0]' data/full_items.json)
           SNAP="data/full_items_${TS}.json"
           cp data/full_items.json "$SNAP"
           git add "$SNAP"
-          git commit -m "Weekly full API dump ($TS)" || echo "No changes"
+          git commit -m "Weekly dump $TS" || echo "No changes"
           git push
