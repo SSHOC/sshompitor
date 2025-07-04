@@ -2,24 +2,27 @@ name: Weekly Full API Dump
 
 on:
   schedule:
-    - cron: '0 3 * * 1'  # Every Monday at 3:00 AM UTC
+    - cron: "0 3 * * 1"    # every Monday 03:00 UTC
   workflow_dispatch:
 
 jobs:
-  collect-full-data:
+  dump:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
       - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
+        run: sudo apt-get update -y && sudo apt-get install -y jq
 
-      - name: Fetch and store full API data
+      - name: Fetch paginated data and build JSON
+        env:
+          OUTDIR: ${{ github.workspace }}/data
         run: |
-          TIMESTAMP=$(date +%s)
-          mkdir -p "$GITHUB_WORKSPACE/data"
+          set -euo pipefail
+          TS=$(date +%s)
+          mkdir -p "$OUTDIR"
 
+          # endpoints and the matching key where items live
           declare -A ENDPOINTS=(
             ["tools-services"]="https://marketplace-api.sshopencloud.eu/api/tools-services"
             ["training-materials"]="https://marketplace-api.sshopencloud.eu/api/training-materials"
@@ -27,8 +30,7 @@ jobs:
             ["datasets"]="https://marketplace-api.sshopencloud.eu/api/datasets"
             ["workflows"]="https://marketplace-api.sshopencloud.eu/api/workflows"
           )
-
-          declare -A RESPONSE_KEYS=(
+          declare -A KEYS=(
             ["tools-services"]="toolsServices"
             ["training-materials"]="trainingMaterials"
             ["publications"]="publications"
@@ -36,64 +38,58 @@ jobs:
             ["workflows"]="workflows"
           )
 
-          TMP_FULL="$GITHUB_WORKSPACE/data/full_items_body.json"
-          echo "{" > "$TMP_FULL"
-          FIRST_FULL=true
+          COMBINED="$(mktemp)"
+          jq -n '{}' > "$COMBINED"      # start with empty object
 
-          for CATEGORY in "${!ENDPOINTS[@]}"; do
-            BASE_URL="${ENDPOINTS[$CATEGORY]}"
-            RESPONSE_KEY="${RESPONSE_KEYS[$CATEGORY]}"
+          for CAT in "${!ENDPOINTS[@]}"; do
+            BASE=${ENDPOINTS[$CAT]}
+            KEY=${KEYS[$CAT]}
 
-            FIRST_PAGE=$(curl -s "${BASE_URL}?page=1")
-            TOTAL_PAGES=$(echo "$FIRST_PAGE" | jq -r '.pages // 1')
+            FIRST=$(curl -s "${BASE}?page=1")
+            PAGES=$(echo "$FIRST" | jq -r '.pages // 1')
 
-            TMP_DIR="/tmp/category_${CATEGORY}_$RANDOM"
-            mkdir -p "$TMP_DIR"
-            ITEMS_FILE="$TMP_DIR/items.json"
-            METADATA_FILE="$TMP_DIR/meta.json"
+            TMPDIR=$(mktemp -d)
+            META="$TMPDIR/meta.json"
+            ITEMS="$TMPDIR/items.json"
 
-            echo "$FIRST_PAGE" | jq "del(.${RESPONSE_KEY})" > "$METADATA_FILE"
-            echo "[" > "$ITEMS_FILE"
+            echo "$FIRST" | jq "del(.${KEY})" > "$META"
+            echo "[" > "$ITEMS"
 
-            FIRST=true
-            echo "$FIRST_PAGE" | jq -c ".${RESPONSE_KEY}[]" | while IFS= read -r item; do
-              if [ "$FIRST" = true ]; then
-                echo "$item" >> "$ITEMS_FILE"
-                FIRST=false
-              else
-                echo "," >> "$ITEMS_FILE"
-                echo "$item" >> "$ITEMS_FILE"
-              fi
+            # page-1 items
+            FIRST_FLAG=true
+            echo "$FIRST" | jq -c ".${KEY}[]" | while read -r itm; do
+              $FIRST_FLAG && { echo "$itm" >> "$ITEMS"; FIRST_FLAG=false; } || { echo "," >> "$ITEMS"; echo "$itm" >> "$ITEMS"; }
             done
 
-            for ((i = 2; i <= TOTAL_PAGES; i++)); do
-              PAGE_DATA=$(curl -s "${BASE_URL}?page=${i}")
-              PAGE_ITEMS=$(echo "$PAGE_DATA" | jq -c ".${RESPONSE_KEY}[]")
-              while IFS= read -r item; do
-                echo "," >> "$ITEMS_FILE"
-                echo "$item" >> "$ITEMS_FILE"
-              done <<< "$PAGE_ITEMS"
+            # remaining pages
+            for ((p=2; p<=PAGES; p++)); do
+              curl -s "${BASE}?page=$p" | jq -c ".${KEY}[]" | while read -r itm; do
+                echo "," >> "$ITEMS"
+                echo "$itm" >> "$ITEMS"
+              done
             done
+            echo "]" >> "$ITEMS"
 
-            echo "]" >> "$ITEMS_FILE"
+            # merge meta + items
+            FULL=$(mktemp)
+            jq -s '.[0] + {items: .[1]}' "$META" "$ITEMS" > "$FULL"
 
-            RESPONSE=$(jq -s '.[0] + {items: .[1]}' "$METADATA_FILE" "$ITEMS_FILE")
-
-            if [ "$FIRST_FULL" = true ]; then
-              echo "\"$CATEGORY\": $RESPONSE" >> "$TMP_FULL"
-              FIRST_FULL=false
-            else
-              echo ", \"$CATEGORY\": $RESPONSE" >> "$TMP_FULL"
-            fi
+            # merge into combined file (file-to-file to avoid arg-size limits)
+            jq --argfile cur "$COMBINED" --argfile add "$FULL" --arg k "$CAT" \
+               '($cur + {($k): $add})' > "$COMBINED.tmp" && mv "$COMBINED.tmp" "$COMBINED"
           done
 
-          echo "}" >> "$TMP_FULL"
-          jq -n --arg ts "$TIMESTAMP" --slurpfile data "$TMP_FULL" '{($ts): $data[0]}' > "$GITHUB_WORKSPACE/data/full_items.json"
+          # wrap with timestamp key
+          jq -n --arg ts "$TS" --argfile data "$COMBINED" '{($ts): $data}' > "$OUTDIR/full_items.json"
 
-      - name: Commit full_items.json
+      - name: Commit snapshot
         run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git add data/full_items.json
-          git commit -m "Weekly full_items.json update: $(date -u)" || echo "No changes to commit"
+          git config --global user.name  "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          TS=$(jq -r 'keys[0]' data/full_items.json)
+          SNAP="data/full_items_${TS}.json"
+          cp data/full_items.json "$SNAP"
+          git add "$SNAP"
+          git commit -m "Weekly full API dump ($TS)" || echo "No changes"
           git push
