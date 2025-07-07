@@ -52,16 +52,16 @@ jobs:
             TMPDIR=$(mktemp -d)
             META="$TMPDIR/meta.json"
             ITEMS="$TMPDIR/items.json"
-            echo "$FIRST" | jq "del(.\${KEY})" > "$META"
+            echo "$FIRST" | jq --arg k "$KEY" 'del(.[$k])' > "$META"
             echo "[" > "$ITEMS"
 
             FIRST_FLAG=true
-            echo "$FIRST" | jq -c ".\${KEY} // [] | .[]" | while read -r itm; do
+            echo "$FIRST" | jq -c --arg k "$KEY" '.[$k] // [] | .[]' | while read -r itm; do
               if $FIRST_FLAG; then echo "$itm" >> "$ITEMS"; FIRST_FLAG=false; else echo "," >> "$ITEMS" && echo "$itm" >> "$ITEMS"; fi
             done
 
             for ((p=2; p<=PAGES; p++)); do
-              curl -s "${BASE}?page=$p" | jq -c ".\${KEY} // [] | .[]" | while read -r itm; do
+              curl -s "${BASE}?page=$p" | jq -c --arg k "$KEY" '.[$k] // [] | .[]' | while read -r itm; do
                 echo "," >> "$ITEMS" && echo "$itm" >> "$ITEMS"
               done
             done
