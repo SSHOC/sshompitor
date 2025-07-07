@@ -1,0 +1,41 @@
+# WARNING: the DEBUG parameter only accepts True or False, if True the MP dataset is *not changed*
+# by write functions such as setURLStatusFlags etc
+ 
+DEBUG: True
+
+API:
+  SERVER: https://marketplace-api.sshopencloud.eu/
+  USER: secretuser
+  PASSWORD: secretword
+
+MARKETPLACE:
+  SERVER: https://marketplace.sshopencloud.eu/
+
+DATASET_ENTRYPOINTS:
+    toolsandservices: api/tools-services 
+    publications: api/publications
+    trainingmaterials: api/training-materials
+    workflows: api/workflows
+    datasets: api/datasets
+    actors: api/actors
+    list_of_properties: api/property-types?perpage=100
+    login: /api/auth/sign-in
+    keyword: api/concept-search?types=keyword&q=
+    concepts: api/concept-search
+
+CATEGORIES:
+    - toolsandservices
+    - publications
+    - trainingmaterials
+    - workflows
+    - datasets
+    
+#Dataset specific info, should not be changed
+EMPTY_DESCRIPTION_VAL: No description provided.
+
+CATEGORY_FILTER_VALUES:
+   toolsandservices: tool-or-service 
+   publications: publication
+   trainingmaterials: training-material
+   workflows: workflow
+   datasets: dataset
