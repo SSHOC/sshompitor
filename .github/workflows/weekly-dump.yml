@@ -2,88 +2,45 @@ name: Weekly Full API Dump
 
 on:
   schedule:
-    - cron: "0 3 * * 1"  # Run every Monday at 03:00 UTC
+    - cron: "0 3 * * 1"      # every Monday 03:00 UTC
   workflow_dispatch:
 
 jobs:
-  fetch_full_api_dump:
+  weekly_dump:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Install jq
-        run: sudo apt-get update -y && sudo apt-get install -y jq
+      # Python
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
 
-      - name: Fetch full paginated data and build full_items.json
+      # editable install of the repo (comment out if using PYTHONPATH hack)
+      - name: Install local package
         run: |
-          set -euo pipefail
-          TIMESTAMP=$(date +%s)
-          mkdir -p $GITHUB_WORKSPACE/data
+          python -m pip install --upgrade pip
+          pip install -e .
 
-          # --- Category endpoints & JSON keys ---
-          declare -A ENDPOINTS=(
-            ["tools-services"]="https://marketplace-api.sshopencloud.eu/api/tools-services"
-            ["training-materials"]="https://marketplace-api.sshopencloud.eu/api/training-materials"
-            ["publications"]="https://marketplace-api.sshopencloud.eu/api/publications"
-            ["datasets"]="https://marketplace-api.sshopencloud.eu/api/datasets"
-            ["workflows"]="https://marketplace-api.sshopencloud.eu/api/workflows"
-          )
-          declare -A KEYS=(
-            ["tools-services"]="toolsServices"
-            ["training-materials"]="trainingMaterials"
-            ["publications"]="publications"
-            ["datasets"]="datasets"
-            ["workflows"]="workflows"
-          )
-
-          # file that will become the per‑timestamp object body
-          BODY_FILE=$(mktemp)
-          echo "{}" > "$BODY_FILE"
-
-          for CAT in "${!ENDPOINTS[@]}"; do
-            BASE="${ENDPOINTS[$CAT]}"
-            KEY="${KEYS[$CAT]}"
-
-            FIRST=$(curl -s "${BASE}?page=1")
-            PAGES=$(echo "$FIRST" | jq -r '.pages // 1')
-
-            TMPDIR=$(mktemp -d)
-            META="$TMPDIR/meta.json"
-            ITEMS="$TMPDIR/items.json"
-            echo "$FIRST" | jq --arg k "$KEY" 'del(.[$k])' > "$META"
-            echo "[" > "$ITEMS"
-
-            FIRST_FLAG=true
-            echo "$FIRST" | jq -c --arg k "$KEY" '.[$k] // [] | .[]' | while read -r itm; do
-              if $FIRST_FLAG; then echo "$itm" >> "$ITEMS"; FIRST_FLAG=false; else echo "," >> "$ITEMS" && echo "$itm" >> "$ITEMS"; fi
-            done
-
-            for ((p=2; p<=PAGES; p++)); do
-              curl -s "${BASE}?page=$p" | jq -c --arg k "$KEY" '.[$k] // [] | .[]' | while read -r itm; do
-                echo "," >> "$ITEMS" && echo "$itm" >> "$ITEMS"
-              done
-            done
-            echo "]" >> "$ITEMS"
-
-            FULL=$(mktemp)
-            jq -s '.[0] + {items: .[1]}' "$META" "$ITEMS" > "$FULL"
-            jq --arg key "$CAT" --argfile data "$FULL" '. + {($key): $data}' "$BODY_FILE" > "$BODY_FILE.tmp" && mv "$BODY_FILE.tmp" "$BODY_FILE"
-          done
-
-          # Wrap with timestamp
-          jq -n --arg ts "$TIMESTAMP" --slurpfile d "$BODY_FILE" '{($ts): $d[0]}' > $GITHUB_WORKSPACE/data/full_items.json
-
-      - name: Commit timestamped snapshot
+      - name: Install runtime deps
         run: |
-          git config --global user.name "github-actions[bot]"
+          pip install -r requirements.txt
+
+      # Run the data pull
+      - name: Run full data fetch
+        run: |
+          mkdir -p data
+          python scripts/fetch_full_items.py
+
+      # Commit whatever JSON/Parquet files were just written
+      - name: Commit snapshots
+        run: |
+          set -e
+          git config --global user.name  "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --no-rebase https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
 
-          TS=$(jq -r 'keys[0]' $GITHUB_WORKSPACE/data/full_items.json)
-          SNAP="data/full_items_${TS}.json"
-          cp $GITHUB_WORKSPACE/data/full_items.json "$SNAP"
-          git add "$SNAP"
-          git commit -m "Weekly full API snapshot for $TS" || echo "No changes"
+          git pull --no-rebase https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
+          git add data/full_items_*.json data/full_items_*.parquet
+          git commit -m "Weekly full API snapshot $(date -u)" || echo "No changes"
           git push https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
