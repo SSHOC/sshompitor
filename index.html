@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSHOMPitor</title>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Chart.js adapter for date-fns to handle time scales -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+
+    <!-- date-fns for date formatting -->
+    <script src="https://cdn.jsdelivr.net/npm/date-fns@4.1.0/cdn.min.js"></script>
+
+    <style>
+        #container {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        #chartContainer {
+            width: 60%;
+            height: 50vh;
+        }
+        canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        #dataTable {
+            width: 35%;
+            border-collapse: collapse;
+        }
+
+        #dataTable th, #dataTable td {
+            border: 1px solid black;
+            padding: 8px;
+            text-align: left;
+        }
+
+        #dataTable th {
+            background-color: #f2f2f2;
+        }
+
+        /* Green for positive changes, red for negative */
+        .positive {
+            background-color: #c8e6c9; /* light green */
+        }
+
+        .negative {
+            background-color: #ffcdd2; /* light red */
+        }
+
+        #sourcePieContainer {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 30px;
+        }
+
+        #pieChartContainer {
+            width: 45%;
+        }
+
+        #sourceDataTable {
+            width: 50%;
+            border-collapse: collapse;
+        }
+
+        #sourceDataTable th, #sourceDataTable td {
+            border: 1px solid black;
+            padding: 8px;
+            text-align: left;
+        }
+
+        #sourceDataTable th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+    <h1>Total number of items in the SSHOMP</h1>
+
+    <div id="container">
+        <div id="chartContainer">
+            <canvas id="hitsChart"></canvas>
+        </div>
+
+        <table id="dataTable">
+            <caption>Change in items (1-day, 7-day, 30-day)</caption>
+            <thead>
+                <tr>
+                    <th>Metric</th>
+                    <th>1-day</th>
+                    <th>7-day</th>
+                    <th>30-day</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <!-- New Pie Chart and Table Section -->
+    <div id="sourcePieContainer">
+        <div id="pieChartContainer">
+            <canvas id="sourcePieChart"></canvas>
+        </div>
+
+        <table id="sourceDataTable">
+            <caption>Items per Source</caption>
+            <thead>
+                <tr>
+                    <th>Source</th>
+                    <th>Items</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+
+    <script>
+         async function fetchJSON(file) {
+            const response = await fetch(file);
+            if (!response.ok) {
+                console.error("Error fetching " + file);
+                return null;
+            }
+            return await response.json();
+        }
+    // Calculate the change from the latest data point
+    function calculateDifference(data, days) {
+        const SECONDS_IN_A_DAY = days * 24 * 60 * 60;  // Number of seconds in the given number of days
+        const latest = data[data.length - 1];  // Most recent data point
+        const targetTimestamp = latest.timestamp - SECONDS_IN_A_DAY;  // Target timestamp X days before the latest
+
+        // Find the closest data point that is before or equal to the target timestamp
+        let target = null;
+        for (let i = data.length - 1; i >= 0; i--) {
+            if (data[i].timestamp <= targetTimestamp) {
+                target = data[i];
+                break;
+            }
+        }
+
+        if (!target) return null;  // If no data exists for that time frame
+
+        // Calculate the total dynamically based on the fields
+        const latestTotal = latest.dataset + latest.trainingMaterial + latest.publication + latest.workflow + latest.toolOrService;
+        const targetTotal = target.dataset + target.trainingMaterial + target.publication + target.workflow + target.toolOrService;
+
+        return {
+            dataset: latest.dataset - target.dataset,
+            trainingMaterial: latest.trainingMaterial - target.trainingMaterial,
+            publication: latest.publication - target.publication,
+            workflow: latest.workflow - target.workflow,
+            toolOrService: latest.toolOrService - target.toolOrService,
+            total: latestTotal - targetTotal  // Calculate the difference in total
+        };
+    }
+
+    // Populate the table with changes
+    function populateTable(latest, changes1Day, changes7Day, changes30Day) {
+        const tableBody = document.querySelector('#dataTable tbody');
+        tableBody.innerHTML = '';  // Clear existing rows
+
+        const metrics = ['dataset', 'trainingMaterial', 'publication', 'workflow', 'toolOrService', 'total'];
+        const labels = ['Dataset', 'Training Material', 'Publication', 'Workflow', 'Tool or Service', 'Total'];
+
+        metrics.forEach((metric, index) => {
+            const row = document.createElement('tr');
+            const labelCell = document.createElement('td');
+            labelCell.textContent = labels[index];
+
+            const createCell = (change, value) => {
+                const cell = document.createElement('td');
+                if (change === null) {
+                    cell.textContent = 'N/A';
+                } else {
+                    cell.textContent = value !== undefined ? value : change;
+                    cell.className = change > 0 ? 'positive' : (change < 0 ? 'negative' : '');
+                }
+                return cell;
+            };
+
+            row.appendChild(labelCell);
+            row.appendChild(createCell(changes1Day ? changes1Day[metric] : null));
+            row.appendChild(createCell(changes7Day ? changes7Day[metric] : null));
+            row.appendChild(createCell(changes30Day ? changes30Day[metric] : null));
+
+            tableBody.appendChild(row);
+        });
+    }
+
+     // Populate the source table with sorted data and highlight "User-created items"
+    function populateSourceTable(sourceData, userCreatedItems) {
+        const tableBody = document.querySelector('#sourceDataTable tbody');
+        tableBody.innerHTML = '';  // Clear existing rows
+
+        // Convert sourceData object to array of [source, itemCount] and sort by item count in descending order
+        const sortedSourceData = Object.entries(sourceData).sort((a, b) => b[1] - a[1]);
+
+        // Populate table with sorted source data
+        sortedSourceData.forEach(([source, itemCount]) => {
+            const row = document.createElement('tr');
+            const labelCell = document.createElement('td');
+            labelCell.textContent = source;
+
+            const valueCell = document.createElement('td');
+            valueCell.textContent = typeof itemCount === 'number' ? itemCount : 'N/A';
+
+            row.appendChild(labelCell);
+            row.appendChild(valueCell);
+            tableBody.appendChild(row);
+        });
+
+        // Add "User-created items" row, and highlight it with a special class
+        const row = document.createElement('tr');
+        row.classList.add('highlight');  // Add a class for highlighting the row
+
+        const labelCell = document.createElement('td');
+        labelCell.textContent = 'User-created items';
+
+        const valueCell = document.createElement('td');
+        valueCell.textContent = isNaN(userCreatedItems) ? 'N/A' : userCreatedItems;
+
+        row.appendChild(labelCell);
+        row.appendChild(valueCell);
+        tableBody.appendChild(row);
+    }
+
+    // Render the pie chart with sorted data and highlight "User-created items"
+    function renderPieChart(sourceData, userCreatedItems) {
+        const ctx = document.getElementById('sourcePieChart').getContext('2d');
+
+        // Convert sourceData object to array and sort it by item count in descending order
+        const sortedSourceData = Object.entries(sourceData).sort((a, b) => b[1] - a[1]);
+
+        // Create labels and data values arrays, and append "User-created items" at the end
+        const labels = [...sortedSourceData.map(([source]) => source), 'User-created items'];
+        const dataValues = [...sortedSourceData.map(([, itemCount]) => typeof itemCount === 'number' ? itemCount : 0), userCreatedItems];
+
+        const backgroundColors = [
+            ...sortedSourceData.map(() => 'rgba(54, 162, 235, 0.2)'),  // Regular sources color
+            'rgba(255, 99, 132, 0.5)'  // Special color for "User-created items"
+        ];
+
+        const borderColors = [
+            ...sortedSourceData.map(() => 'rgba(54, 162, 235, 1)'),  // Regular sources color
+            'rgba(255, 99, 132, 1)'  // Special color for "User-created items"
+        ];
+
+        const pieChart = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: dataValues,
+                    backgroundColor: backgroundColors,
+                    borderColor: borderColors,
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: { callbacks: { label: context => `${context.label}: ${context.raw} items` } }
+                }
+            }
+        });
+    }
+
+
+    function renderChart(data) {
+        const ctx = document.getElementById('hitsChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.map(d => new Date(d.timestamp * 1000)),
+                datasets: [
+                    {
+                        label: 'Total Items',
+                        data: data.map(d => d.total),
+                        borderColor: 'rgba(0, 0, 0, 1)',
+                        backgroundColor: 'rgba(0, 0, 0, 0.1)',
+                        fill: true,
+                        tension: 0.1
+                    },
+                    {
+                        label: 'Dataset',
+                        data: data.map(d => d.dataset),
+                        borderColor: 'rgba(17, 159, 4, 1)',
+                        backgroundColor: 'rgba(17, 159, 4, 0.1)',
+                        fill: true,
+                        tension: 0.1
+                    },
+                    {
+                        label: 'Training Material',
+                        data: data.map(d => d.trainingMaterial),
+                        borderColor: 'rgba(235, 220, 0, 1)',
+                        backgroundColor: 'rgba(235, 220, 0, 0.1)',
+                        fill: true,
+                        tension: 0.1
+                    },
+                    {
+                        label: 'Publication',
+                        data: data.map(d => d.publication),
+                        borderColor: 'rgba(200, 0, 0, 1)',
+                        backgroundColor: 'rgba(200, 0, 0, 0.1)',
+                        fill: true,
+                        tension: 0.1
+                    },
+                    {
+                        label: 'Workflow',
+                        data: data.map(d => d.workflow),
+                        borderColor: 'rgba(139, 0, 230, 0.8)',
+                        backgroundColor: 'rgba(139, 0, 230, 0.1)',
+                        fill: true,
+                        tension: 0.1
+                    },
+                    {
+                        label: 'Tool or Service',
+                        data: data.map(d => d.toolOrService),
+                        borderColor: 'rgba(16, 0, 255, 1)',
+                        backgroundColor: 'rgba(16, 0, 255, 0.1)',
+                        fill: true,
+                        tension: 0.1
+                    }
+                ]
+            },
+            options: {
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: { unit: 'day', stepSize: 1, tooltipFormat: 'PPpp' },
+                        title: { display: true, text: 'Date' }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'Total Number of Items' }
+                    }
+                },
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+    }
+
+async function fetchAllData() {
+        const itemsData = await fetchJSON('items.json');
+        const sourcesData = await fetchJSON('sources.json');
+
+        if (!itemsData || !sourcesData) return [];
+
+        // Get the latest timestamp from sources.json and extract the source items
+        const latestTimestamp = Object.keys(sourcesData).sort().pop();  // Get the latest timestamp
+        const sourceItems = sourcesData[latestTimestamp];  // Extract the actual source data
+
+        const hitsData = Object.keys(itemsData).map(timestamp => {
+            const categories = itemsData[timestamp];
+            return {
+                timestamp: parseInt(timestamp),
+                dataset: categories['datasets'],
+                trainingMaterial: categories['training-materials'],
+                publication: categories['publications'],
+                workflow: categories['workflows'],
+                toolOrService: categories['tools-services'],
+                total: (categories['datasets'] + categories['training-materials'] + categories['publications'] + categories['workflows'] + categories['tools-services'])
+
+            };
+        });
+
+        if (hitsData.length < 1) return;
+
+        const changes1Day = calculateDifference(hitsData, 1);
+        const changes7Day = calculateDifference(hitsData, 7);
+        const changes30Day = calculateDifference(hitsData, 30);
+
+        // Populate table with the differences from the latest data point
+        populateTable(hitsData[hitsData.length - 1], changes1Day, changes7Day, changes30Day);
+
+        // Calculate total items from the latest entry in items.json
+        const totalItems = hitsData[hitsData.length - 1].total;
+
+        // Ensure all source values are numbers and sum them
+        const totalSourceItems = Object.values(sourceItems).reduce((sum, count) => sum + (typeof count === 'number' ? count : 0), 0);
+
+        // Calculate "User-created items" (items without a source)
+        const userCreatedItems = totalItems - totalSourceItems;
+
+        // Populate the source table and render the pie chart
+        populateSourceTable(sourceItems, userCreatedItems);
+        renderPieChart(sourceItems, userCreatedItems);
+
+        return hitsData;
+    }
+
+    fetchAllData().then(renderChart);
+</script>
+
+</body>
+</html>
