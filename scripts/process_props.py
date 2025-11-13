@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
 
-    - name: Run process_props.py (with PYTHONPATH)
-    env:
-          PYTHONPATH: ${{ github.workspace }}
-        run: |
-          python scripts/process_props.py
-
 "Takes the full_items_<ts>.json file with the latest timestamp and expands the properties field into separate columns, out putting to full_items_expanded_<ts>.json."
 import json, pathlib, pandas as pd
 import importlib
