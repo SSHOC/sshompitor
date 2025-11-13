@@ -5,7 +5,6 @@ import json, pathlib, pandas as pd
 import importlib
 from sshmarketplacelib import  eval as eva, helper as hel
 importlib.reload(hel)
-util = hel.Util()
 
 
 OUT_DIR = pathlib.Path("data/processed")
