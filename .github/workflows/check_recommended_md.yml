@@ -1,0 +1,39 @@
+name: Check MD
+
+on:
+  workflow_dispatch:    # Allow manual runs from GitHub UI
+  schedule:
+    - cron: "30 6 * * 1"  # Every week at 06:30 UTC
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Run check_recommended_Md.py
+        run: |
+          python scripts/check_recommended_Md.py
+
+      - name: Upload results (if any)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: process-props-output
+          path: |
+            output/**
+            reports/**
+            logs/**
+          if-no-files-found: ignore
