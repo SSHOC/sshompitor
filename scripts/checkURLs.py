@@ -82,7 +82,7 @@ def check_urls(row, var, mode):
 #apply on df for accessibleAt, logging progress every 100 items os we know it's working and not stuck. Use async mode for faster checking, but can switch to sync if there are issues with async in GH actions or similar environments.
 tqdm.pandas(desc="Checking accessibleAt")
 
-df_urls = df.progress_apply(!
+df_urls = df.progress_apply(
     lambda row: check_urls(row, "accessibleAt", mode="async"),
     axis=1
 )
