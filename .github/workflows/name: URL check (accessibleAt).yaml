@@ -1,0 +1,69 @@
+name: URL check (accessibleAt)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "URL check mode"
+        required: true
+        default: "async"
+        type: choice
+        options: ["async", "sync"]
+  schedule:
+    # run every week at 3:30am, adjust as needed
+    - cron: "30 3 * * 0"
+
+permissions:
+  contents: write
+
+jobs:
+  url-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # If you have requirements.txt, prefer this:
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+          # Ensure these are present (safe even if already in requirements.txt)
+          pip install pandas tqdm nest_asyncio aiohttp
+
+      - name: Run URL check script
+        env:
+          # You can read this env var in your script to switch mode.
+          # For scheduled runs this will be empty -> default to async in your script.
+          URL_CHECK_MODE: ${{ inputs.mode }}
+        run: |
+          python -u scripts/checkURLs.py
+
+      - name: Upload output artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: url-check-output
+          path: |
+            data/processed/*.csv
+            data/processed/*.json
+          if-no-files-found: warn
+
+      # Optional: commit outputs back to the repo (only if you want that)
+      - name: Commit results to repo
+        if: github.event_name != 'pull_request'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/processed || true
+          git commit -m "URL check results" || exit 0
+          git push
