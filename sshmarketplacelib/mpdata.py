@@ -128,7 +128,7 @@ class MPData:
         #print (url)
         df_desc_par=pd.read_json(url+'?perpage=20', orient='columns')
         
-        df_desc=df_desc._append(df_desc_par, ignore_index=True)
+        df_desc = pd.concat([df_desc, df_desc_par], ignore_index=True)
         if not df_desc.empty:
             if pages==0:
                 pages=df_desc.loc[0].pages
@@ -142,7 +142,7 @@ class MPData:
                 except:
                     print(f'SEVERE: Error getting {itemscategory}, items may be not completely loaded. (Error loading {turl})')
                     
-                df_desc=df_desc._append(df_desc_par, ignore_index=True)
+                df_desc = pd.concat([df_desc, df_desc_par], ignore_index=True)
             category=df_desc.columns[-1]
             items= pd.json_normalize(df_desc[category])
 
@@ -228,7 +228,7 @@ class MPData:
                 try:
                     with urllib.request.urlopen(turl+'&perpage=100') as murl:
                         df_desc_par = json.load(murl)
-                        df_concepts=df_concepts._append(pd.DataFrame(df_desc_par["concepts"]), ignore_index=True)
+                        df_concepts = pd.concat([df_concepts, pd.DataFrame(df_desc_par["concepts"])], ignore_index=True)
                 except:
                     print(f'SEVERE: Error getting concepts, items may be not completely loaded. (Error loading {turl})')
         return df_concepts
@@ -926,7 +926,7 @@ class MPData:
         if not df_log.empty and log_entry['persistentId'] in df_log.persistentId.values and log_entry['restore_version'] in df_log.restore_version.values and log_entry['operation'] in df_log.operation.values:
             return df_log
         else:
-            df_log=df_log._append([log_entry])
+            df_log = pd.concat([df_log, pd.DataFrame([log_entry])], ignore_index=True)
             return df_log
     
         
