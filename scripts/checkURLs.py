@@ -17,7 +17,7 @@ pathlib.Path("data/processed")
 OUT_FILE_PATTERN = "full_items_URLcheck_{}.json"
 
 #read the latest full_items<ts>.json file
-IN_DIR = pathlib.Path("../data/")
+IN_DIR = pathlib.Path("data/")
 existing_files = list(IN_DIR.glob("full_items_*.json"))
 print(f"Found {len(existing_files)} input files in {IN_DIR} matching full_items_*.json")
 if not existing_files:
