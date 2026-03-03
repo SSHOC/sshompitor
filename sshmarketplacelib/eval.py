@@ -296,3 +296,44 @@ class URLCheck(object):
         return df_list_of_url_status[['MPUrl','persistentId', 'category', 'label', 'property','url', 'status']];
         
         
+## addition 2026
+
+def simple_URL_check(url):
+    if not url or url.strip()=='':
+        return int(400) #400 for empty or None
+    try:
+        r =requests.get(url,timeout=3)
+        return int(r.status_code)
+    except requests.exceptions.ConnectionError:
+        return int(503)
+    except requests.exceptions.ConnectTimeout:
+        return int(408)
+    except requests.exceptions.ReadTimeout:
+        return int(408)
+    except requests.exceptions.RequestException:
+        return int(500)
+    except TypeError:
+        print('TypeError')
+        return int(400)
+    
+#async version of simple_URL_check using aiohttp
+import aiohttp
+import asyncio
+import nest_asyncio
+async def async_URL_check(url):
+    if not url or url.strip()=='':
+        return int(400) #400 for empty or None
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=3) as response:
+                return int(response.status)
+    except aiohttp.ClientConnectionError:
+        return int(503)
+    except asyncio.TimeoutError:
+        return int(408)
+    except aiohttp.ClientError:
+        return int(500)
+    except TypeError:
+        print('TypeError')
+        return int(400)
+    

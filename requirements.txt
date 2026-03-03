@@ -4,3 +4,6 @@ requests
 PyYAML 
 bokeh
 fastparquet
+
+aiohttp
+nest_asyncio
