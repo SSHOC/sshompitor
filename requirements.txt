@@ -7,3 +7,4 @@ fastparquet
 
 aiohttp
 nest_asyncio
+tqdm

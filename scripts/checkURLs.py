@@ -13,8 +13,8 @@ from tqdm.auto import tqdm
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from sshmarketplacelib import eval as eva, helper as hel
 
-pathlib.Path("data/processed")
-OUT_FILE_PATTERN = "full_items_URLcheck_{}.json"
+OUT_DIR = pathlib.Path("data/processed")
+OUT_FILE_PATTERN = "full_items_URLcheck_{}.csv"
 
 #read the latest full_items<ts>.json file
 IN_DIR = pathlib.Path("data/")
