@@ -1,6 +1,6 @@
 # sshompitor
 
-Monitoring and data quality tool for the [SSH Open Marketplace](https://marketplace.sshopencloud.eu/) (SSHOC MP) — a catalog of tools, datasets, publications, workflows, and training materials for the Social Sciences and Humanities.
+Monitoring and data quality tool for the [SSH Open Marketplace](https://marketplace.sshopencloud.eu/) (SSHOMP) — a catalog of tools, datasets, publications, workflows, and training materials for the Social Sciences and Humanities.
 
 ## What it does
 
