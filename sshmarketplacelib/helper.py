@@ -607,53 +607,53 @@ class Util(object):
             if items.empty:
                 continue
             if not nrelitems:
-                    selected_items=items[items['relatedItems'].map(len)>0]
-                else:
-                    if type(nrelitems[0])==int and len (nrelitems)==1:
-                        nval=nrelitems[0]
-                        l = list(nrelitems)
-                        l.insert(1, nval)
-                        l[0]='>'
-                        nrelitems=tuple(l)
+                selected_items=items[items['relatedItems'].map(len)>0]
+            else:
+                if type(nrelitems[0])==int and len (nrelitems)==1:
+                    nval=nrelitems[0]
+                    l = list(nrelitems)
+                    l.insert(1, nval)
+                    l[0]='>'
+                    nrelitems=tuple(l)
 
-                    if type(nrelitems[0])!=int and len (nrelitems)==1:
-                        l = list(nrelitems)
-                        l.insert(1, 0)
-                        l[0]='>'
-                        nrelitems=tuple(l)
+                if type(nrelitems[0])!=int and len (nrelitems)==1:
+                    l = list(nrelitems)
+                    l.insert(1, 0)
+                    l[0]='>'
+                    nrelitems=tuple(l)
 
-                    if nrelitems[0] not in self.acceptedops or len (nrelitems)>2:
-                        print('wrong parameters ')
-                        return
-                    if (nrelitems[0].strip()=='=' and nrelitems[1]<1) or (nrelitems[0].strip()=='<' and nrelitems[1]==1):
-                        #print (items['relatedItems'])
-                        items['value']=items['relatedItems'].map(len)
-                        no_related_items=items[items['relatedItems'].map(len)==0]
-
-
-                        #return selected_items[['persistentId', 'category', 'label', 'relatedItems']]
-                    if nrelitems[0].strip()=='=' and nrelitems[1]>0:
-                        #print (nrelitems[1])
-                        selected_items=items[items['relatedItems'].map(len)==nrelitems[1]]
-                    if nrelitems[0].strip()=='>':
-                        selected_items=items[items['relatedItems'].map(len)>nrelitems[1]]
-                    if nrelitems[0].strip()=='<' and nrelitems[1]>1:
-                        selected_items=items[items['relatedItems'].map(len)<nrelitems[1]]
-
-                items= pd.json_normalize(data=items.to_dict(orient='records'), record_path='relatedItems', meta_prefix='item_', meta=['label', 'persistentId', 'category'], errors='ignore')
-                #print (category)
-                if no_related_items.empty:
-                    selected_items['value']=selected_items['relatedItems'].map(len)
-
-                    searched_items=pd.merge(left=selected_items, right=items, left_on='persistentId', right_on='item_persistentId')
-
-                    if not searched_items.empty:
-                        dfs.append(searched_items)
+                if nrelitems[0] not in self.acceptedops or len (nrelitems)>2:
+                    print('wrong parameters ')
+                    return
+                if (nrelitems[0].strip()=='=' and nrelitems[1]<1) or (nrelitems[0].strip()=='<' and nrelitems[1]==1):
+                    #print (items['relatedItems'])
+                    items['value']=items['relatedItems'].map(len)
+                    no_related_items=items[items['relatedItems'].map(len)==0]
 
 
-                else:
-                    dfs.append (no_related_items)
-                    returned_fields=no_rel_items_fields
+                    #return selected_items[['persistentId', 'category', 'label', 'relatedItems']]
+                if nrelitems[0].strip()=='=' and nrelitems[1]>0:
+                    #print (nrelitems[1])
+                    selected_items=items[items['relatedItems'].map(len)==nrelitems[1]]
+                if nrelitems[0].strip()=='>':
+                    selected_items=items[items['relatedItems'].map(len)>nrelitems[1]]
+                if nrelitems[0].strip()=='<' and nrelitems[1]>1:
+                    selected_items=items[items['relatedItems'].map(len)<nrelitems[1]]
+
+            items= pd.json_normalize(data=items.to_dict(orient='records'), record_path='relatedItems', meta_prefix='item_', meta=['label', 'persistentId', 'category'], errors='ignore')
+            #print (category)
+            if no_related_items.empty:
+                selected_items['value']=selected_items['relatedItems'].map(len)
+
+                searched_items=pd.merge(left=selected_items, right=items, left_on='persistentId', right_on='item_persistentId')
+
+                if not searched_items.empty:
+                    dfs.append(searched_items)
+
+
+            else:
+                dfs.append (no_related_items)
+                returned_fields=no_rel_items_fields
         if not dfs:
             print ('getRelatedItems(itemcategories, *nrelitems): no values found')
             return pd.DataFrame(columns=returned_fields)
