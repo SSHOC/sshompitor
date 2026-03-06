@@ -269,7 +269,7 @@ sourceSelect.addEventListener('change', function() {{
 </html>
 """
 
-out_path = OUT_DIR / f"metadata_dashboard_table_{ts_str}.html"
+out_path = OUT_DIR / f"metadata_dashboard_table.html"
 with open(out_path, "w", encoding="utf-8") as fo:
     fo.write(html_content)
 
