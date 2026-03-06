@@ -6,7 +6,7 @@ Generates a curation HTML dashboard combining:
   - Metadata completeness issues  (data/processed/full_items_MDcheck_<ts>.json)
   - URL check results             (data/processed/full_items_URLcheck_<ts>.csv, optional)
 
-Output: dashboard_output/curation_dashboard_<ts>.html
+Output: dashboard_output/curation_dashboard.html
 """
 
 import ast
