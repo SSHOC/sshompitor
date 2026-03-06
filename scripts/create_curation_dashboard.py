@@ -395,7 +395,7 @@ html = (HTML
     .replace("__URL_JSON__",      url_json)
     .replace("__URL_TAB_JS__",    url_tab_js))
 
-out_path = OUT / f"curation_dashboard_{ts_str}.html"
+out_path = OUT / f"curation_dashboard.html"
 with open(out_path, "w", encoding="utf-8") as fh:
     fh.write(html)
 
