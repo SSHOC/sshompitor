@@ -16,7 +16,7 @@ import multiprocessing
 from multiprocessing.pool import Pool
 import errno
 
-from . import mpdata as mpd
+import pathlib
 from collections import defaultdict
 
 class Util(object):
@@ -66,10 +66,6 @@ class Util(object):
 
 
 
-        json_properties=pd.read_json(self.list_of_properties_url, orient='columns')
-        df_properties= pd.json_normalize(json_properties['propertyTypes'])
-        self.dynamic_properties=df_properties['code'].to_list()
-
         self.acceptedops=['=','<','>']
 
 
@@ -101,6 +97,14 @@ class Util(object):
             dataset=dataset.drop(columns='tempurl',axis=1)
         return dataset
 
+    def _load_snapshot(self):
+        """Load the latest full_items_<ts>.json snapshot from the data directory."""
+        data_path = pathlib.Path(self.datadir)
+        existing = sorted(data_path.glob("full_items_*.json"), key=lambda p: p.stat().st_mtime)
+        if not existing:
+            raise FileNotFoundError(f"No full_items_*.json snapshots found in {self.datadir}")
+        return pd.read_json(existing[-1], orient="records")
+
     def getAllItemsBySources(self ):
 
         """
@@ -109,19 +113,9 @@ class Util(object):
 
         """
 
-        dfs=[]
-        for key in self.dataset_entrypoints:
-            if os.path.isfile(self.datadir+key+'.pickle') and not key=='actors':
-                temp= pd.read_pickle(self.datadir+key+'.pickle')
-                category=temp.columns[-1]
-                items= pd.json_normalize(temp[category])
-                dfs.append(items)
-        df_items= pd.concat(dfs, ignore_index=True)
-        a_sources=df_items
-        #a_sources=df_items.drop_duplicates(['source.label','label'])
-        a_sources['source.label']= a_sources['source.label'].apply(lambda y: 'NA' if pd.isnull(y) else y )
-        df_item_sources = a_sources['source.label'].value_counts()
-        return df_item_sources
+        df_items = self._load_snapshot()
+        df_items['source.label'] = df_items['source.label'].apply(lambda y: 'NA' if pd.isnull(y) else y)
+        return df_items['source.label'].value_counts()
 
     def getItemsBySources(self, itemscategory):
 
@@ -137,22 +131,12 @@ class Util(object):
 
         """
 
-        dfs=[]
-        if os.path.isfile(self.datadir+itemscategory+'.pickle'):
-            temp= pd.read_pickle(self.datadir+itemscategory+'.pickle')
-            category=temp.columns[-1]
-            items= pd.json_normalize(temp[category])
-        else:
-            print('Not loaded or empty dataset: '+itemscategory)
+        df_items = self._load_snapshot()
+        df = df_items[df_items['category'] == itemscategory]
+        if df.empty:
+            print('Not loaded or empty dataset: ' + itemscategory)
             return pd.DataFrame()
-        df_items= items
-        if df_items.empty:
-            print('Empty dataset')
-            return pd.DataFrame()
-        a_sources=df_items
-        #a_sources=df_items.drop_duplicates(['source.label','label'])
-        df_item_sources = a_sources['source.label'].value_counts()
-        return df_item_sources
+        return df['source.label'].value_counts()
 
     def getCategoriesBySources(self):
 
@@ -163,24 +147,9 @@ class Util(object):
 
         """
 
-        dfs=[]
-        dfs=[]
-        for key in self.dataset_entrypoints:
-            if os.path.isfile(self.datadir+key+'.pickle') and not key=='actors':
-                temp= pd.read_pickle(self.datadir+key+'.pickle')
-                category=temp.columns[-1]
-                items= pd.json_normalize(temp[category])
-                dfs.append(items)
-        df_items= pd.concat(dfs, ignore_index=True)
-
-
-        df_items_abs=df_items.groupby(['category', 'source.label']).count()['label'].unstack('category')
-
-        df_items_abs=df_items_abs.T
-        df_items_abs=df_items_abs.fillna(0)
-        df_items_abs=df_items_abs.round()
-
-
+        df_items = self._load_snapshot()
+        df_items_abs = df_items.groupby(['category', 'source.label']).count()['label'].unstack('category')
+        df_items_abs = df_items_abs.T.fillna(0).round()
         df_items_abs.index.names = ['Categories']
         return df_items_abs
 
@@ -192,25 +161,18 @@ class Util(object):
 
         """
 
-        dfs=[]
-
-        for key in self.dataset_entrypoints:
-
-            if os.path.isfile('data/'+key+'.pickle') and not key=='actors' and not key=='list_of_properties' and not key=='login':
-                print(f'Loading Actors for {key}')
-                temp= pd.read_pickle('data/'+key+'.pickle')
-                category=temp.columns[-1]
-                items= pd.json_normalize(data=temp[category], record_path='contributors', meta=['label', 'persistentId', 'category'])
-                dfs.append(items)
-            else:
-                if not key=='actors' and not key=='list_of_properties' and not key=='login':
-                    print(f'{key} data is not present, skip...')
-
-        df_items= pd.concat(dfs, ignore_index=True)
-        cols = df_items.columns.tolist()
+        df_items = self._load_snapshot()
+        items = pd.json_normalize(
+            data=df_items.to_dict(orient='records'),
+            record_path='contributors',
+            meta=['label', 'persistentId', 'category'],
+            errors='ignore'
+        )
+        if items.empty:
+            return pd.DataFrame()
+        cols = items.columns.tolist()
         cols = cols[-3:] + cols[:-3]
-        df_items=df_items[cols]
-        return df_items
+        return items[cols]
 
     def getAllProperties(self, dataset):
         """
@@ -305,23 +267,14 @@ class Util(object):
                          'type.code', 'type.label', 'type.type', 'type.groupName', 'type.allowedVocabularies', 'concept.code', 'concept.vocabulary.code',
                          'concept.vocabulary.scheme', 'concept.vocabulary.namespace', 'concept.vocabulary.label', 'concept.vocabulary.closed',
                          'concept.label', 'concept.notation', 'concept.uri', 'concept.candidate', 'value', 'concept.definition']
-        dfs=[]
-        for key in self.dataset_entrypoints:
-            if os.path.isfile('data/'+key+'.pickle') and not key=='actors':
-                temp= pd.read_pickle('data/'+key+'.pickle')
-                category=temp.columns[-1]
-                items= pd.json_normalize(data=temp[category], record_path='properties', meta_prefix='ts_', meta=['label', 'persistentId', 'category'])
-                dfs.append(items)
-        df_items= pd.concat(dfs, ignore_index=True)
-        if isinstance(dataset, pd.DataFrame):
-            if not dataset.empty:
-                df_list_of_properties_sources_subset=pd.merge(left=dataset, right=df_items, left_on='persistentId', right_on='ts_persistentId')
-                if 'source.label_x' in df_list_of_properties_sources_subset.columns:
-                    df_list_of_properties_sources_subset.rename(columns = {'source.label_x': 'source.label', 'ts_label':'label'}, inplace = True)
-                return df_list_of_properties_sources_subset[returned_values]
-
-        df_items['type.allowedVocabularies'] = df_items['type.allowedVocabularies'].apply(lambda y: np.nan if len(y)==0 else y)
-        df_items.rename(columns = {'ts_persistentId': 'persistentId', 'ts_label':'label', 'ts_category':'category'}, inplace = True)
+        df_snapshot = self._load_snapshot()
+        df_items = self.getAllProperties(df_snapshot)
+        if isinstance(dataset, pd.DataFrame) and not dataset.empty:
+            df_merged = pd.merge(left=dataset, right=df_items, left_on='persistentId', right_on='ts_persistentId')
+            if 'source.label_x' in df_merged.columns:
+                df_merged.rename(columns={'source.label_x': 'source.label', 'ts_label': 'label'}, inplace=True)
+            return df_merged[[c for c in returned_values if c in df_merged.columns]]
+        df_items.rename(columns={'ts_persistentId': 'persistentId', 'ts_label': 'label', 'ts_category': 'category'}, inplace=True)
         return df_items
 
 
@@ -442,19 +395,24 @@ class Util(object):
 
 
     def getPropertiesValuesFrequency(self, itemscategory, propertyname):
-        dfs=[]
-        if os.path.isfile(self.datadir+itemscategory+'.pickle'):
-            temp= pd.read_pickle(self.datadir+itemscategory+'.pickle')
-            category=temp.columns[-1]
-            items= pd.json_normalize(data=temp[category], record_path='properties', meta_prefix='ts_', meta=['label'])
-        else:
-            return(pd.DataFrame())
-        df_items= items
-        df_items['type.allowedVocabularies'] = df_items['type.allowedVocabularies'].apply(lambda y: np.nan if len(y)==0 else y)
-        if propertyname not in list(df_items.columns):
-            return (pd.DataFrame())
-        df_items_values = df_items[propertyname].value_counts()
-        return df_items_values
+        df_all = self._load_snapshot()
+        df_cat = df_all[df_all['category'] == itemscategory]
+        if df_cat.empty:
+            return pd.DataFrame()
+        df_items = pd.json_normalize(
+            data=df_cat.to_dict(orient='records'),
+            record_path='properties',
+            meta_prefix='ts_',
+            meta=['label'],
+            errors='ignore'
+        )
+        if 'type.allowedVocabularies' in df_items.columns:
+            df_items['type.allowedVocabularies'] = df_items['type.allowedVocabularies'].apply(
+                lambda y: np.nan if isinstance(y, (list, tuple)) and len(y) == 0 else y
+            )
+        if propertyname not in df_items.columns:
+            return pd.DataFrame()
+        return df_items[propertyname].value_counts()
 
     #Updated 2025
     def getDuplicates(self, dataset, props=''):
@@ -556,7 +514,6 @@ class Util(object):
 
         """
 
-        dfs=[]
         properties=[]
         if props.strip()!='':
             properties=props.replace(" ", "").split(',')
@@ -564,67 +521,30 @@ class Util(object):
             print ("A list of properties must be defined")
             return
 
-        for key in self.dataset_entrypoints:
-            if os.path.isfile(self.datadir+key+'.pickle') and not key=='actors':
-                temp= pd.read_pickle(self.datadir+key+'.pickle')
-                category=temp.columns[-1]
-                items= pd.json_normalize(temp[category])
-                dfs.append(items)
-        df_items= pd.concat(dfs, ignore_index=True)
+        df_items = self._load_snapshot()
         temp_ed_str=self.empty_description.replace(".","")
         df_items = df_items.replace(self.empty_description, np.nan)
         df_items = df_items.replace(temp_ed_str, np.nan)
-        #df_items.licenses = df_items.licenses.apply(lambda y: np.nan if len(y)==0 else y)
-        df_items.externalIds = df_items.externalIds.apply(lambda y: np.nan if len(y)==0 else y)
-        df_items.contributors = df_items.contributors.apply(lambda y: np.nan if len(y)==0 else y)
-        df_items.accessibleAt = df_items.accessibleAt.apply(lambda y: np.nan if len(y)==0 else y)
-        df_items.relatedItems = df_items.relatedItems.apply(lambda y: np.nan if len(y)==0 else y)
-        df_items.properties = df_items.properties.apply(lambda y: np.nan if len(y)==0 else y)
-        df_items.media = df_items.media.apply(lambda y: np.nan if len(y)==0 else y)
-        #dynamic properties
-        df_prop_data=self.getAllProperties()
-        df_prop_data.value = df_prop_data.value.apply(lambda y: np.nan if y is None else y)
-        df_prop_data['type.groupName'] = df_prop_data['type.groupName'].apply(lambda y: np.nan if y is None else y)
-        df_prop_data['concept.vocabulary.label'] = df_prop_data['concept.vocabulary.label'].apply(lambda y: np.nan if y=='' else y)
-        df_prop_data['concept.notation'] = df_prop_data['concept.notation'].apply(lambda y: np.nan if y=='' else y)
-        df_prop_data['concept.definition'] = df_prop_data['concept.definition'].apply(lambda y: np.nan if y=='' else y)
+        for col in ['externalIds', 'contributors', 'accessibleAt', 'relatedItems', 'properties', 'media']:
+            if col in df_items.columns:
+                df_items[col] = df_items[col].apply(lambda y: np.nan if isinstance(y, (list, dict)) and len(y) == 0 else y)
 
-        df_prop_data=df_prop_data.reset_index()
-        df_prop_data.drop_duplicates(subset=['ts_persistentId', 'type.code'], keep='last', inplace = True)
-        df_items=df_items.reset_index()
-        if props.strip()!='':
-            properties=props.replace(" ", "").split(',')
-        if properties and properties[0].strip()!='':
-            for pr in properties:
-                if (pr not in df_items.columns) & (pr not in df_prop_data.columns) & (pr not in self.dynamic_properties):
-                    print (f'Wrong parameter: {pr} is not a valid property name \n')
-                    return
-        for pr in properties:
-            if pr in df_prop_data.columns:
-                df_prop_data_tmp=df_prop_data.groupby('ts_persistentId')[pr].apply(list).reset_index(name='temp')
-                df_prop_data_tmp[pr]=df_prop_data_tmp.temp.apply(lambda y: np.nan if pd.isnull(y).all() else y)
-                df_prop_data_tmp=df_prop_data_tmp.drop(colums='temp',axis=1)
-                df_items=pd.merge(df_items, df_prop_data_tmp, left_on='persistentId',right_on='ts_persistentId', how = 'outer').fillna(np.nan)
-        # here dynamic properties
-        not_found_properties=[]
-        for pr in properties:
-            if pr in self.dynamic_properties:
-                #print ('pr '+pr)
-                myd=df_prop_data[df_prop_data['type.code']==pr]
-                if not myd.empty:
-                    #print (' here '+pr)
-                    tmp=myd[['ts_persistentId', 'type.code']]
-                    #tmp.rename(columns = {'type.code': pr}, inplace=True)
-                    df_items=pd.merge(left=df_items, right=tmp, left_on='persistentId', right_on='ts_persistentId', how = 'outer', suffixes=('', '_y')).fillna(np.nan)
-                    df_items.rename(columns = {'type.code': pr}, inplace=True)
-                else:
+        # Top-level columns are checked directly; dynamic properties are looked up in the nested 'properties' array
+        top_level_props = [pr for pr in properties if pr in df_items.columns]
+        dynamic_props = [pr for pr in properties if pr not in df_items.columns]
+        for pr in dynamic_props:
+            df_items[pr] = df_items['properties'].apply(
+                lambda raw: np.nan if not isinstance(raw, list) or not any(
+                    (p.get('type') or {}).get('code') == pr for p in raw if isinstance(p, dict)
+                ) else True
+            )
 
-                    not_found_properties.append(pr)
-                    df_items[pr]=np.nan
-    #     for nfo in not_found_properties:
-    #         properties.remove(nfo)
+        all_props = top_level_props + dynamic_props
+        if not all_props:
+            print("No valid properties found")
+            return pd.DataFrame()
 
-        df_items_mask=df_items[properties].apply(lambda x: x.isnull())
+        df_items_mask=df_items[all_props].apply(lambda x: x.isnull())
         if all:
             df_items=df_items[df_items_mask.all(axis=1)]
         else:
@@ -681,13 +601,12 @@ class Util(object):
             else:
                 print ('No category defined!')
                 return
+        df_all = self._load_snapshot()
         for cate in categories:
-            if os.path.isfile('data/'+cate+'.pickle'):
-
-                temp= pd.read_pickle('data/'+cate+'.pickle')
-                category=temp.columns[-1]
-                items= pd.json_normalize(temp[category])
-                if not nrelitems:
+            items = df_all[df_all['category'] == cate].copy()
+            if items.empty:
+                continue
+            if not nrelitems:
                     selected_items=items[items['relatedItems'].map(len)>0]
                 else:
                     if type(nrelitems[0])==int and len (nrelitems)==1:
@@ -721,7 +640,7 @@ class Util(object):
                     if nrelitems[0].strip()=='<' and nrelitems[1]>1:
                         selected_items=items[items['relatedItems'].map(len)<nrelitems[1]]
 
-                items= pd.json_normalize(data=temp[category], record_path='relatedItems', meta_prefix='item_', meta=['label', 'persistentId', 'category'])
+                items= pd.json_normalize(data=items.to_dict(orient='records'), record_path='relatedItems', meta_prefix='item_', meta=['label', 'persistentId', 'category'], errors='ignore')
                 #print (category)
                 if no_related_items.empty:
                     selected_items['value']=selected_items['relatedItems'].map(len)
@@ -760,16 +679,16 @@ class Util(object):
         return df_items[returned_fields]
 
     def getAllRelatedItems(self):
-        dfs=[]
-        for key in self.dataset_entrypoints:
-            if os.path.isfile(self.datadir+key+'.pickle') and not key=='actors':
-                temp= pd.read_pickle(self.datadir+key+'.pickle')
-                category=temp.columns[-1]
-                items= pd.json_normalize(data=temp[category], record_path='relatedItems', meta_prefix='item_', meta=['label', 'persistentId', 'category'])
-                dfs.append(items)
-        df_items= pd.concat(dfs, ignore_index=True)
-        #df_items['type.allowedVocabularies'] = df_items['type.allowedVocabularies'].apply(lambda y: np.nan if len(y)==0 else y)
-        return df_items[['item_persistentId', 'item_category', 'item_label', 'relation.label',  'persistentId', 'category', 'label', 'workflowId', 'description', 'relation.code']]
+        df_snapshot = self._load_snapshot()
+        rel_items = pd.json_normalize(
+            data=df_snapshot.to_dict(orient='records'),
+            record_path='relatedItems',
+            meta_prefix='item_',
+            meta=['label', 'persistentId', 'category'],
+            errors='ignore'
+        )
+        cols = ['item_persistentId', 'item_category', 'item_label', 'relation.label', 'persistentId', 'category', 'label', 'workflowId', 'description', 'relation.code']
+        return rel_items[[c for c in cols if c in rel_items.columns]]
 
 #addition 2025
 def parse_properties(raw):

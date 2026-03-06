@@ -54,7 +54,7 @@ def check_urls(row, var, mode):
             except Exception as e:
                 status = f'error: {str(e)}'
             return (field, url, status)
-        #check all URLs asynchronously
+        #check all URLs asynchronously. how can we set the concurrency limit here to avoid overwhelming the system or the target servers? We could use a semaphore or a pool of workers, but for now we'll just fire them all off and see how it goes. We can always add concurrency control later if needed.
         async def check_all_urls_async():
             tasks = []
             for field, url in urls:

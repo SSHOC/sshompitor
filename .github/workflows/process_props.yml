@@ -1,9 +1,7 @@
 name: Process Props
 
 on:
-  workflow_dispatch:    # Allow manual runs from GitHub UI
-  schedule:
-    - cron: "0 6 * * 1"  # Every week at 06:00 UTC
+  workflow_dispatch:    # Manual runs only; pipeline runs via create_dashboard.yml
 
 jobs:
   run-script:

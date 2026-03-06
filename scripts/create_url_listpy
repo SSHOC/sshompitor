@@ -1,0 +1,27 @@
+#load latest snapshot, extract all accessibleAt, write to a csv
+import json, pathlib, pandas as pd
+#read the latest full_items<ts>.json file
+IN_DIR = pathlib.Path("data/")
+existing_files = list(IN_DIR.glob("full_items_*.json"))
+print(f"Found {len(existing_files)} input files in {IN_DIR} matching full_items_*.json")
+if not existing_files:
+    print("No input files found.")
+else:
+    latest_file = max(existing_files, key=lambda p: p.stat().st_mtime)
+    ts_str = latest_file.stem.split("_")[-1]
+    in_path = IN_DIR / f"full_items_{ts_str}.json"
+    df = pd.read_json(in_path, orient="records")
+    print(f"loaded {in_path} with {len(df)} items")
+
+#simply create all mp links from the category and the persitentId.
+df['MP_URL'] = df.apply(lambda row: f"https://marketplace.sshopencloud.eu/{row['category']}/{row['persistentId']}" if 'persistentId' in row and row['persistentId'] else None, axis=1)
+
+#write to a file for review, one entry per line. First line must be # LinkChecker URL list”. --stdin Read list of white-space separated URLs to check from stdin. 
+OUT_DIR = pathlib.Path("data/processed")
+OUT_DIR.mkdir(exist_ok=True)
+out_path = OUT_DIR / f"full_items_URLlist_{ts_str}.txt"
+with open(out_path, "w") as f:
+    f.write("# LinkChecker URL list\n")
+    for url in df['MP_URL'].dropna().unique():
+        f.write(f"{url}\n")
+print(f"✅ wrote {out_path} with {len(df['MP_URL'].dropna().unique())} unique URLs")

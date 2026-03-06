@@ -1,39 +1,57 @@
-name: Update dashboard
+name: Weekly Dashboard Build
 
 on:
-  workflow_dispatch:    # Allow manual runs from GitHub UI
+  workflow_run:
+    workflows: ["Weekly Full API Dump"]
+    types: [completed]
   schedule:
-    - cron: "0 7 * * 1"  # Every week at 06:30 UTC
+    - cron: "0 6 * * 2"  # Tuesday 06:00 UTC fallback (dump runs Monday 03:00)
+  workflow_dispatch:
 
 jobs:
-  run-script:
+  build-dashboard:
     runs-on: ubuntu-latest
+    # For workflow_run trigger: only proceed if the dump succeeded
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Install local package
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install -e .
 
-      - name: Run visualize_data.py
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Create output directories
         run: |
-          python scripts/visualize_data.py
+          mkdir -p data/processed
+          mkdir -p dashboard_output
 
-      - name: Upload results (if any)
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: process-props-output
-          path: |
-            output/**
-            reports/**
-            logs/**
-          if-no-files-found: ignore
+      - name: Expand properties
+        run: python scripts/process_props.py
+
+      - name: Check metadata completeness
+        run: python scripts/check_recommended_Md.py
+
+      - name: Build dashboard HTML
+        run: python scripts/visualize_data.py
+
+      - name: Commit dashboard
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --no-rebase https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
+          git add dashboard_output/ data/processed/full_items_MDcheck_*.json
+          git commit -m "Weekly dashboard update $(date -u)" || echo "No changes"
+          git push https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main

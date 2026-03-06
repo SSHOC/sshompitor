@@ -1,9 +1,7 @@
 name: Check MD
 
 on:
-  workflow_dispatch:    # Allow manual runs from GitHub UI
-  schedule:
-    - cron: "30 6 * * 1"  # Every week at 06:30 UTC
+  workflow_dispatch:    # Manual runs only; pipeline runs via create_dashboard.yml
 
 jobs:
   run-script:
@@ -18,10 +16,13 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
+      - name: Install local package
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install -e .
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
 
       - name: Run check_recommended_Md.py
         run: |

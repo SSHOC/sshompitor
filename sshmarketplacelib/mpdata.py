@@ -394,12 +394,12 @@ class MPData:
                 #add HTTP-status-code property 
                 if not curation_property_exists:
                     #print ('appending curation_property_value')
-                    myrow['properties']._append(curation_property_value)
+                    myrow['properties'].append(curation_property_value)
                 if not curation_detail_exists:
                     print ('appending curation_detail_value ' + self.createURLCurationProperty('', vproperty, vvalue)+"\n\n")
                     curation_detail_value={ "type": curationDetail, "value": self.createURLCurationProperty('', vproperty, vvalue)}
                     #print (f" ------ property before { myrow['properties']} \n")
-                    myrow['properties']._append(curation_detail_value)
+                    myrow['properties'].append(curation_detail_value)
                     #print (f"{updateItem}, {curation_detail_value}, pid: {toolpid}, \n { myrow['properties']}")
                 if curation_property_exists and curation_detail_exists:
                     updateItem=False
@@ -542,12 +542,12 @@ class MPData:
                 
                 if not curation_property_exists:
                     print ('append curation_property_value')
-                    myrow['properties']._append(curation_property_value)
+                    myrow['properties'].append(curation_property_value)
 
                 if not curation_detail_exists:
                     print ('append curation_detail_value')
                     curation_detail_value={ "type": curationDetail, "value": self.createCurationProperty('', vproperty, vvalue)}
-                    myrow['properties']._append(curation_detail_value)
+                    myrow['properties'].append(curation_detail_value)
                     print (curation_detail_value)
                 
                 if curation_property_exists and curation_detail_exists:
@@ -729,13 +729,13 @@ class MPData:
                         #add HTTP-status-code property 
                         if not curation_property_exists:
                             #print ('appending curation_property_value')
-                            myrow['properties']._append(curation_property_value)
+                            myrow['properties'].append(curation_property_value)
                             updateItem=updateItem or True
                         if not curation_detail_exists:
                             print ('Appending curation_detail_flag ' + self.createURLCurationProperty('', vproperty, vvalue)+"\n\n")
                             curation_detail_value={ "type": curationDetail, "value": self.createURLCurationProperty('', vproperty, vvalue)}
                             #print (f" ------ property before { myrow['properties']} \n")
-                            myrow['properties']._append(curation_detail_value)
+                            myrow['properties'].append(curation_detail_value)
                             updateItem=updateItem or True
                     
                             #print (f"{updateItem}, {curation_detail_value}, pid: {toolpid}, \n { myrow['properties']}")
@@ -865,7 +865,7 @@ class MPData:
                                
                             else:
                                 dropattrflag=True
-                                idxl._append(purlidx)
+                                idxl.append(purlidx)
                         # else:
                         #     print (f"nah {list(purl)[0]}")
         if (dropattrflag & (cdetidx>-1)):
@@ -1016,14 +1016,14 @@ class MPData:
                
                     if not curation_property_exists:
                         print ('append curation_property_value')
-                        myrow['properties']._append(curation_property_value)
+                        myrow['properties'].append(curation_property_value)
                         updateItem=updateItem or True
     
                     if not curation_detail_exists:
                         
                         curation_detail_value={ "type": curationDetail, "value": self.updateURLCurationPropertyJson('', vproperty, vvalue)}
                         print (f'append curation_detail_value {curation_detail_value}')
-                        myrow['properties']._append(curation_detail_value)
+                        myrow['properties'].append(curation_detail_value)
                         updateItem=updateItem or True
                             #print (f"{updateItem}, {curation_detail_value}, pid: {toolpid}, \n { myrow['properties']}")
                 if updateItem and self.debug:
@@ -1203,7 +1203,7 @@ class MPData:
                 updateItem=False
                 print('Error, please check the items... maybe already merged?')
                 return ''
-        item['properties']._append(curation__merge_value)
+        item['properties'].append(curation__merge_value)
         posturl=self.getPutEP(item['category'])+'merge?with='+pids.replace(' ','')
         obj = json.dumps(item)
         print ('Storing merged item for '+str(pids)+'...')

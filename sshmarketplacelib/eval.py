@@ -16,7 +16,7 @@ import multiprocessing
 from multiprocessing.pool import Pool
 import errno
 
-from . import mpdata as mpd
+import pathlib
 
 class URLCheck(object):
     '''
@@ -66,9 +66,15 @@ class URLCheck(object):
         self.url_all_properties=['accessibleAt','terms-of-use-url', 'access-policy-url', 'privacy-policy-url', 'see-also', 'user-manual-url', 'service-level-url', 'thumbnail']
         self.url_dynamic_properties=['terms-of-use-url', 'access-policy-url', 'privacy-policy-url', 'see-also', 'user-manual-url', 'service-level-url', 'thumbnail']
 
-        self.mpdata = mpd.MPData()
-        
-    
+
+    def _load_snapshot(self):
+        """Load the latest full_items_<ts>.json snapshot from the data directory."""
+        data_path = pathlib.Path(self.datadir)
+        existing = sorted(data_path.glob("full_items_*.json"), key=lambda p: p.stat().st_mtime)
+        if not existing:
+            raise FileNotFoundError(f"No full_items_*.json snapshots found in {self.datadir}")
+        return pd.read_json(existing[-1], orient="records")
+
     def getHTTP_Status(self, var):
         df_tool_work_aa_http_status = []
         regex = re.compile(
@@ -101,7 +107,7 @@ class URLCheck(object):
                 df_tool_work_aa_http_status.append({'url': var, 'status': int(400)})
         else:
             # print(var ,0)
-            df_tool_work_aa_http_status = df_tool_work_aa_http_status._append({'url': var, 'status': int(400)})
+            df_tool_work_aa_http_status.append({'url': var, 'status': int(400)})
         return (df_tool_work_aa_http_status)
     
     
@@ -124,33 +130,27 @@ class URLCheck(object):
         """
         
         properties=[]
-        #df_urls=[]
-        dfs=[]
-        pool = Pool()
         cores=multiprocessing.cpu_count()
         if props.strip()!='':
             properties=props.replace(" ", "").split(',')
         else:
             properties=self.url_all_properties
-        if itemcategories.strip()!='':
+        df_all = self._load_snapshot()
+        if itemcategories.strip()=='all' or itemcategories.strip()=='':
+            df_items = df_all
+        else:
             categories=itemcategories.replace(" ", "").split(',')
             for ca in categories:
                 if ca.strip() not in self.allCategories:
                     print ('Wrong Category: '+ca)
-        else:
-            if itemcategories.strip()=='all':
-                categories=self.allCategories
-            else:
-                print ('No category defined!')
-                return
-        for cate in categories:
-            if os.path.isfile(self.datadir+cate+'.pickle'):
-                temp= pd.read_pickle(self.datadir+cate+'.pickle')
-                category=temp.columns[-1]
-                items= pd.json_normalize(temp[category])
-                dfs.append(items)
-        df_items= pd.concat(dfs)
-        df_prop_data=self.mpdata.getAllProperties()
+            df_items = df_all[df_all['category'].isin([c.strip() for c in categories])]
+        df_prop_data = pd.json_normalize(
+            data=df_items.to_dict(orient='records'),
+            record_path='properties',
+            meta_prefix='ts_',
+            meta=['label', 'persistentId', 'category'],
+            errors='ignore'
+        )
         df_url_work_all = pd.DataFrame (columns = ['persistentId','property','value'])
         pivotField='value'
         #print (pivotField)
@@ -184,7 +184,7 @@ class URLCheck(object):
         for el in listofresults:
             #print (el[0])
             if (el and len(el)>0 and el[0]):
-                df_tool_work_aa_http_status=df_tool_work_aa_http_status._append(el[0], ignore_index=True)
+                df_tool_work_aa_http_status=pd.concat([df_tool_work_aa_http_status, pd.DataFrame([el[0]])], ignore_index=True)
             # else:
             #     print (f'error {el}')
     
@@ -235,7 +235,13 @@ class URLCheck(object):
             print("Error: dataset must be a dataframe")
             return pd.DatFrame()
         df_items= dataset
-        df_prop_data=self.mpdata.getAllProperties()
+        df_prop_data = pd.json_normalize(
+            data=df_items.to_dict(orient='records'),
+            record_path='properties',
+            meta_prefix='ts_',
+            meta=['label', 'persistentId', 'category'],
+            errors='ignore'
+        )
         df_url_work_all = pd.DataFrame (columns = ['persistentId','property','value'])
         pivotField='value'
         #print (pivotField)
@@ -278,7 +284,7 @@ class URLCheck(object):
         for el in listofresults:
             #print (el)
             if el:
-                df_tool_work_aa_http_status=df_tool_work_aa_http_status._append(el[0], ignore_index=True)
+                df_tool_work_aa_http_status=pd.concat([df_tool_work_aa_http_status, pd.DataFrame([el[0]])], ignore_index=True)
         #end
         #return df_tool_work_aa_http_status
             
