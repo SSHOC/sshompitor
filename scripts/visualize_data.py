@@ -207,7 +207,7 @@ function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
                    .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 }
-function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+function escRe(s) { return s.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\\\$&'); }
 
 function scoreColor(s) {
   if (s >= 90) return '#198754';

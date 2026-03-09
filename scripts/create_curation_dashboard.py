@@ -306,7 +306,7 @@ function esc(s) {
                    .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 }
 function escRe(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  return s.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\\\$&');
 }
 
 // Missing fields frequency summary
