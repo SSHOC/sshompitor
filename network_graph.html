@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SSHOMPitor – Relations Graph</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+<script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+<style>
+  body { background: #f8f9fa; font-size: 0.875rem; margin: 0; overflow: hidden; }
+
+  /* ── layout ── */
+  #app { display: flex; flex-direction: column; height: 100vh; }
+  #main { display: flex; flex: 1; overflow: hidden; }
+  #sidebar {
+    width: 240px; min-width: 200px; background: #fff;
+    border-right: 1px solid #dee2e6; overflow-y: auto;
+    padding: 10px 12px; flex-shrink: 0;
+  }
+  #graph-wrap { flex: 1; position: relative; }
+  #graph { width: 100%; height: 100%; }
+
+  /* ── detail panel ── */
+  #detail {
+    position: absolute; bottom: 12px; right: 12px; width: 260px;
+    background: #fff; border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.15);
+    padding: 12px; display: none; z-index: 10; font-size: 0.82rem;
+  }
+  #detail h6 { font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; }
+  #detail .d-label { font-weight: 500; word-break: break-word; }
+  #detail .d-row { display: flex; justify-content: space-between; margin-top: 3px; color: #555; }
+  #detail .d-row span:first-child { color: #888; }
+
+  /* ── overlay badge while loading ── */
+  #loading-overlay {
+    position: absolute; inset: 0; background: rgba(248,249,250,.85);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem; color: #555; z-index: 20;
+  }
+
+  /* ── sidebar elements ── */
+  .sidebar-section { margin-bottom: 12px; }
+  .sidebar-section label.section-title {
+    font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .05em; color: #888; display: block; margin-bottom: 5px;
+  }
+  .chip-list { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip {
+    cursor: pointer; border-radius: 20px; padding: 1px 9px;
+    font-size: 0.75rem; border: 1px solid; transition: opacity .15s;
+    white-space: nowrap; user-select: none;
+  }
+  .chip.off { opacity: .3; }
+
+  /* category dot */
+  .cat-dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:4px; }
+
+  /* stat bar */
+  #stat-bar { font-size: 0.75rem; color: #6c757d; padding: 3px 8px;
+              border-top: 1px solid #dee2e6; background: #fff; }
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- Navbar -->
+<nav class="navbar navbar-dark bg-dark px-3 py-2" style="flex-shrink:0">
+  <a href="index.html" class="navbar-brand fw-semibold mb-0" style="font-size:0.95rem">
+    ← SSHOMPitor
+  </a>
+  <span class="text-light" style="font-size:0.82rem">Relations Graph</span>
+  <div class="d-flex gap-2">
+    <button id="btn-physics" class="btn btn-sm btn-outline-light">Physics ON</button>
+    <button id="btn-fit"     class="btn btn-sm btn-outline-light">Fit view</button>
+  </div>
+</nav>
+
+<div id="main">
+
+  <!-- Sidebar -->
+  <div id="sidebar">
+
+    <!-- Search -->
+    <div class="sidebar-section">
+      <label class="section-title">Search node</label>
+      <input id="search-box" type="text" class="form-control form-control-sm"
+             placeholder="Label or ID…">
+      <div id="search-results" style="margin-top:4px; max-height:120px; overflow-y:auto;"></div>
+    </div>
+
+    <!-- Min-degree -->
+    <div class="sidebar-section">
+      <label class="section-title">Min degree: <span id="deg-val">1</span></label>
+      <input id="deg-slider" type="range" class="form-range" min="1" max="20" value="1">
+    </div>
+
+    <!-- Categories -->
+    <div class="sidebar-section">
+      <label class="section-title">Categories</label>
+      <div class="chip-list" id="cat-chips"></div>
+    </div>
+
+    <!-- Relations -->
+    <div class="sidebar-section">
+      <label class="section-title">Relations</label>
+      <div class="chip-list" id="rel-chips"></div>
+    </div>
+
+    <!-- Legend -->
+    <div class="sidebar-section">
+      <label class="section-title">Legend</label>
+      <div id="legend" style="font-size:0.78rem; line-height:1.8;"></div>
+    </div>
+  </div>
+
+  <!-- Graph canvas -->
+  <div id="graph-wrap">
+    <div id="loading-overlay">Loading graph…</div>
+    <div id="graph"></div>
+    <!-- Detail panel -->
+    <div id="detail">
+      <h6>Node detail</h6>
+      <div class="d-label" id="d-label"></div>
+      <div class="d-row"><span>ID</span>       <span id="d-id"></span></div>
+      <div class="d-row"><span>Category</span> <span id="d-cat"></span></div>
+      <div class="d-row"><span>Source</span>   <span id="d-src"></span></div>
+      <div class="d-row"><span>Degree</span>   <span id="d-deg"></span></div>
+      <div style="margin-top:8px">
+        <a id="d-link" href="#" target="_blank" rel="noopener noreferrer"
+           class="btn btn-sm btn-outline-primary w-100" style="font-size:0.78rem">
+          Open in Marketplace ↗
+        </a>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<div id="stat-bar">Loading…</div>
+</div><!-- /app -->
+
+<script>
+/* ── colour maps ──────────────────────────────────────────────── */
+const CAT_COLOR = {
+  'tool-or-service':  '#1000ff',
+  'dataset':          '#119f04',
+  'publication':      '#c80000',
+  'training-material':'#ebdc00',
+  'workflow':         '#8b00e6',
+};
+const CAT_DEFAULT = '#999';
+
+const REL_COLOR = {
+  'relates-to': '#aaaaaa',
+  'mentions':   '#0d6efd',
+  'documents':  '#198754',
+  'extends':    '#fd7e14',
+};
+const REL_DEFAULT = '#ccc';
+
+const CAT_LABEL = {
+  'tool-or-service':   'Tool / Service',
+  'dataset':           'Dataset',
+  'publication':       'Publication',
+  'training-material': 'Training Material',
+  'workflow':          'Workflow',
+};
+
+const REL_LABEL = {
+  'relates-to': 'Relates to',
+  'mentions':   'Mentions',
+  'documents':  'Documents',
+  'extends':    'Extends',
+};
+
+/* ── state ────────────────────────────────────────────────────── */
+let allNodes = [], allEdges = [];
+let network, nodesDS, edgesDS;
+let activeCats = new Set();
+let activeRels = new Set();
+let minDegree  = 1;
+
+/* ── helpers ──────────────────────────────────────────────────── */
+function nodeSize(deg) { return Math.max(6, Math.min(30, 6 + deg * 1.5)); }
+
+function visNode(n) {
+  return {
+    id:    n.id,
+    label: n.label.length > 30 ? n.label.slice(0, 28) + '…' : n.label,
+    title: n.label + '\n' + (CAT_LABEL[n.category] || n.category) + ' · degree ' + n.degree,
+    color: { background: CAT_COLOR[n.category] || CAT_DEFAULT,
+             border:     '#333',
+             highlight:  { background: '#ffe082', border: '#f57c00' } },
+    size:  nodeSize(n.degree),
+    shape: 'dot',
+    font:  { size: 10, color: '#333' },
+    _raw:  n,
+  };
+}
+
+function visEdge(e) {
+  const col = REL_COLOR[e.code] || REL_DEFAULT;
+  return {
+    id:    e.from + '|' + e.to + '|' + e.code,
+    from:  e.from,
+    to:    e.to,
+    title: e.label,
+    color: { color: col, highlight: col, hover: col },
+    width: 1,
+    arrows: { to: { enabled: true, scaleFactor: 0.4 } },
+    _code: e.code,
+  };
+}
+
+/* ── build filtered dataset ───────────────────────────────────── */
+function applyFilters() {
+  const visibleNodes = allNodes.filter(n =>
+    n.degree >= minDegree &&
+    activeCats.has(n.category)
+  );
+  const visibleIds = new Set(visibleNodes.map(n => n.id));
+
+  const visibleEdges = allEdges.filter(e =>
+    activeRels.has(e.code) &&
+    visibleIds.has(e.from) &&
+    visibleIds.has(e.to)
+  );
+
+  nodesDS.clear();
+  edgesDS.clear();
+  nodesDS.add(visibleNodes.map(visNode));
+  edgesDS.add(visibleEdges.map(visEdge));
+
+  updateStatBar(visibleNodes.length, visibleEdges.length);
+}
+
+function updateStatBar(n, e) {
+  document.getElementById('stat-bar').textContent =
+    'Showing ' + n.toLocaleString() + ' nodes · ' + e.toLocaleString() + ' edges' +
+    '   (total: ' + allNodes.length.toLocaleString() + ' nodes, ' + allEdges.length.toLocaleString() + ' edges)';
+}
+
+/* ── detail panel ─────────────────────────────────────────────── */
+function showDetail(nodeId) {
+  const raw = allNodes.find(n => n.id === nodeId);
+  if (!raw) return;
+  document.getElementById('d-label').textContent = raw.label;
+  document.getElementById('d-id').textContent    = raw.id;
+  document.getElementById('d-cat').textContent   = CAT_LABEL[raw.category] || raw.category;
+  document.getElementById('d-src').textContent   = raw.source || '—';
+  document.getElementById('d-deg').textContent   = raw.degree;
+  const url = 'https://marketplace.sshopencloud.eu/' + raw.category + '/' + raw.id;
+  document.getElementById('d-link').href = url;
+  document.getElementById('detail').style.display = '';
+}
+
+/* ── search ───────────────────────────────────────────────────── */
+document.getElementById('search-box').addEventListener('input', function() {
+  const q = this.value.trim().toLowerCase();
+  const box = document.getElementById('search-results');
+  box.innerHTML = '';
+  if (!q) return;
+  const hits = allNodes.filter(n =>
+    n.label.toLowerCase().includes(q) || n.id.toLowerCase().includes(q)
+  ).slice(0, 8);
+  hits.forEach(n => {
+    const d = document.createElement('div');
+    d.style.cssText = 'padding:2px 4px;cursor:pointer;font-size:0.78rem;border-radius:3px';
+    d.onmouseenter = () => d.style.background = '#e9ecef';
+    d.onmouseleave = () => d.style.background = '';
+    d.innerHTML = '<span class="cat-dot" style="background:' + (CAT_COLOR[n.category]||CAT_DEFAULT) + '"></span>'
+                + n.label.slice(0, 38) + (n.label.length > 38 ? '…' : '');
+    d.onclick = () => {
+      // focus & select node
+      network.focus(n.id, { scale: 1.2, animation: { duration: 400 } });
+      network.selectNodes([n.id]);
+      showDetail(n.id);
+      box.innerHTML = '';
+      document.getElementById('search-box').value = '';
+    };
+    box.appendChild(d);
+  });
+});
+
+/* ── main init ────────────────────────────────────────────────── */
+fetch('graph.json')
+  .then(r => r.json())
+  .then(data => {
+    allNodes = data.nodes;
+    allEdges = data.edges;
+
+    // collect unique categories / relations
+    const cats = [...new Set(allNodes.map(n => n.category))].sort();
+    const rels = [...new Set(allEdges.map(e => e.code))].sort();
+
+    cats.forEach(c => activeCats.add(c));
+    rels.forEach(r => activeRels.add(r));
+
+    // ── Category chips
+    const catWrap = document.getElementById('cat-chips');
+    cats.forEach(c => {
+      const col = CAT_COLOR[c] || CAT_DEFAULT;
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.style.background = col + '22';
+      chip.style.borderColor = col;
+      chip.style.color = col === '#ebdc00' ? '#555' : col;
+      chip.innerHTML = '<span class="cat-dot" style="background:' + col + '"></span>'
+                     + (CAT_LABEL[c] || c);
+      chip.dataset.cat = c;
+      chip.onclick = () => {
+        if (activeCats.has(c)) activeCats.delete(c);
+        else activeCats.add(c);
+        chip.classList.toggle('off', !activeCats.has(c));
+        applyFilters();
+      };
+      catWrap.appendChild(chip);
+    });
+
+    // ── Relation chips
+    const relWrap = document.getElementById('rel-chips');
+    rels.forEach(r => {
+      const col = REL_COLOR[r] || REL_DEFAULT;
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.style.background = col + '22';
+      chip.style.borderColor = col;
+      chip.style.color = col;
+      chip.textContent = REL_LABEL[r] || r;
+      chip.dataset.rel = r;
+      chip.onclick = () => {
+        if (activeRels.has(r)) activeRels.delete(r);
+        else activeRels.add(r);
+        chip.classList.toggle('off', !activeRels.has(r));
+        applyFilters();
+      };
+      relWrap.appendChild(chip);
+    });
+
+    // ── Legend
+    const legendEl = document.getElementById('legend');
+    cats.forEach(c => {
+      const col = CAT_COLOR[c] || CAT_DEFAULT;
+      legendEl.innerHTML += '<div><span class="cat-dot" style="background:' + col + '"></span>'
+        + (CAT_LABEL[c] || c) + '</div>';
+    });
+    legendEl.innerHTML += '<div style="margin-top:6px; border-top:1px solid #eee; padding-top:4px"></div>';
+    rels.forEach(r => {
+      const col = REL_COLOR[r] || REL_DEFAULT;
+      legendEl.innerHTML += '<div><span style="display:inline-block;width:18px;height:2px;background:'
+        + col + ';vertical-align:middle;margin-right:5px;border-radius:2px"></span>'
+        + (REL_LABEL[r] || r) + '</div>';
+    });
+
+    // ── Vis datasets
+    nodesDS = new vis.DataSet();
+    edgesDS = new vis.DataSet();
+
+    const container = document.getElementById('graph');
+    network = new vis.Network(container, { nodes: nodesDS, edges: edgesDS }, {
+      physics: {
+        enabled: true,
+        stabilization: { iterations: 150, updateInterval: 25 },
+        barnesHut: { gravitationalConstant: -8000, centralGravity: 0.25,
+                     springLength: 120, springConstant: 0.04, damping: 0.09 },
+      },
+      interaction: {
+        hover: true,
+        tooltipDelay: 150,
+        hideEdgesOnDrag: true,
+      },
+      nodes: { borderWidth: 1 },
+      edges: { smooth: { type: 'continuous', roundness: 0.2 } },
+    });
+
+    applyFilters();
+
+    // remove loading overlay after stabilization
+    network.once('stabilizationIterationsDone', () => {
+      document.getElementById('loading-overlay').style.display = 'none';
+    });
+    // fallback: remove after 8 s
+    setTimeout(() => {
+      document.getElementById('loading-overlay').style.display = 'none';
+    }, 8000);
+
+    // click → detail panel
+    network.on('click', params => {
+      if (params.nodes.length) {
+        showDetail(params.nodes[0]);
+      } else {
+        document.getElementById('detail').style.display = 'none';
+      }
+    });
+
+    // ── degree slider
+    const slider = document.getElementById('deg-slider');
+    slider.max = Math.max(...allNodes.map(n => n.degree));
+    slider.addEventListener('input', () => {
+      minDegree = +slider.value;
+      document.getElementById('deg-val').textContent = minDegree;
+      applyFilters();
+    });
+
+    // ── physics toggle
+    let physicsOn = true;
+    document.getElementById('btn-physics').addEventListener('click', () => {
+      physicsOn = !physicsOn;
+      network.setOptions({ physics: { enabled: physicsOn } });
+      document.getElementById('btn-physics').textContent = physicsOn ? 'Physics ON' : 'Physics OFF';
+    });
+
+    // ── fit view
+    document.getElementById('btn-fit').addEventListener('click', () => {
+      network.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } });
+    });
+
+  })
+  .catch(err => {
+    document.getElementById('loading-overlay').textContent = 'Failed to load graph.json: ' + err.message;
+  });
+</script>
+</body>
+</html>

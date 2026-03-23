@@ -50,11 +50,14 @@ jobs:
       - name: Build curation dashboard
         run: python scripts/create_curation_dashboard.py
 
+      - name: Build relations graph data
+        run: python scripts/build_graph_data.py
+
       - name: Commit dashboards
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git pull --no-rebase https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
-          git add dashboard_output/ data/processed/full_items_MDcheck_*.json
+          git add dashboard_output/ data/processed/full_items_MDcheck_*.json graph.json
           git commit -m "Weekly dashboard update $(date -u)" || echo "No changes"
           git push https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/mkrzmr/sshompitor.git main
