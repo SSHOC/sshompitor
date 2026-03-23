@@ -180,6 +180,7 @@ let network, nodesDS, edgesDS;
 let activeCats = new Set();
 let activeRels = new Set();
 let minDegree  = 1;
+let highlightActive = false;
 
 /* ── helpers ──────────────────────────────────────────────────── */
 function nodeSize(deg) { return Math.max(6, Math.min(30, 6 + deg * 1.5)); }
@@ -215,6 +216,7 @@ function visEdge(e) {
 
 /* ── build filtered dataset ───────────────────────────────────── */
 function applyFilters() {
+  highlightActive = false;   // dataset is rebuilt, any highlight is gone
   const visibleNodes = allNodes.filter(n =>
     n.degree >= minDegree &&
     activeCats.has(n.category)
@@ -233,6 +235,91 @@ function applyFilters() {
   edgesDS.add(visibleEdges.map(visEdge));
 
   updateStatBar(visibleNodes.length, visibleEdges.length);
+}
+
+/* ── highlight connected component (BFS, any degree) ─────────── */
+function highlightComponent(nodeId) {
+  // Build adjacency from currently visible edges (undirected traversal)
+  const adj = {};
+  edgesDS.get().forEach(e => {
+    (adj[e.from] = adj[e.from] || []).push({ nb: e.to,   eid: e.id });
+    (adj[e.to]   = adj[e.to]   || []).push({ nb: e.from, eid: e.id });
+  });
+
+  // BFS
+  const visitedNodes = new Set([nodeId]);
+  const visitedEdges = new Set();
+  const queue = [nodeId];
+  while (queue.length) {
+    const cur = queue.shift();
+    for (const { nb, eid } of (adj[cur] || [])) {
+      visitedEdges.add(eid);
+      if (!visitedNodes.has(nb)) { visitedNodes.add(nb); queue.push(nb); }
+    }
+  }
+
+  // Update node colours
+  const nodeUpdates = nodesDS.get().map(n => {
+    if (visitedNodes.has(n.id)) {
+      // restore normal colour (visNode already set it; just clear any dim override)
+      const raw = allNodes.find(r => r.id === n.id);
+      const col = raw ? (CAT_COLOR[raw.category] || CAT_DEFAULT) : CAT_DEFAULT;
+      return { id: n.id,
+               color: { background: col, border: '#333',
+                        highlight: { background: '#ffe082', border: '#f57c00' } },
+               font: { size: 10, color: '#333' },
+               opacity: 1 };
+    } else {
+      return { id: n.id,
+               color: { background: '#e0e0e0', border: '#ccc',
+                        highlight: { background: '#e0e0e0', border: '#ccc' } },
+               font: { size: 10, color: '#bbb' },
+               opacity: 0.25 };
+    }
+  });
+
+  // Update edge colours
+  const edgeUpdates = edgesDS.get().map(e => {
+    if (visitedEdges.has(e.id)) {
+      const col = REL_COLOR[e._code] || REL_DEFAULT;
+      return { id: e.id, color: { color: col, highlight: col, hover: col }, width: 1.5, opacity: 1 };
+    } else {
+      return { id: e.id, color: { color: '#e0e0e0', highlight: '#e0e0e0', hover: '#e0e0e0' }, width: 0.5, opacity: 0.15 };
+    }
+  });
+
+  nodesDS.update(nodeUpdates);
+  edgesDS.update(edgeUpdates);
+  highlightActive = true;
+
+  // update stat bar
+  const bar = document.getElementById('stat-bar');
+  bar.textContent = 'Component: ' + visitedNodes.size.toLocaleString()
+    + ' nodes · ' + visitedEdges.size.toLocaleString()
+    + ' edges  (click background to clear)';
+}
+
+function clearHighlight() {
+  if (!highlightActive) return;
+  highlightActive = false;
+  // Restore all nodes/edges to their normal visNode/visEdge appearance
+  const rawMap = Object.fromEntries(allNodes.map(n => [n.id, n]));
+  nodesDS.update(nodesDS.get().map(n => {
+    const raw = rawMap[n.id];
+    if (!raw) return { id: n.id };
+    const col = CAT_COLOR[raw.category] || CAT_DEFAULT;
+    return { id: n.id,
+             color: { background: col, border: '#333',
+                      highlight: { background: '#ffe082', border: '#f57c00' } },
+             font: { size: 10, color: '#333' },
+             opacity: 1 };
+  }));
+  edgesDS.update(edgesDS.get().map(e => {
+    const col = REL_COLOR[e._code] || REL_DEFAULT;
+    return { id: e.id, color: { color: col, highlight: col, hover: col }, width: 1, opacity: 1 };
+  }));
+  // restore stat bar
+  updateStatBar(nodesDS.length, edgesDS.length);
 }
 
 function updateStatBar(n, e) {
@@ -272,9 +359,9 @@ document.getElementById('search-box').addEventListener('input', function() {
     d.innerHTML = '<span class="cat-dot" style="background:' + (CAT_COLOR[n.category]||CAT_DEFAULT) + '"></span>'
                 + n.label.slice(0, 38) + (n.label.length > 38 ? '…' : '');
     d.onclick = () => {
-      // focus & select node
       network.focus(n.id, { scale: 1.2, animation: { duration: 400 } });
       network.selectNodes([n.id]);
+      highlightComponent(n.id);
       showDetail(n.id);
       box.innerHTML = '';
       document.getElementById('search-box').value = '';
@@ -385,11 +472,14 @@ fetch('graph.json')
       document.getElementById('loading-overlay').style.display = 'none';
     }, 8000);
 
-    // click → detail panel
+    // click → highlight component + detail panel
     network.on('click', params => {
       if (params.nodes.length) {
-        showDetail(params.nodes[0]);
+        const nodeId = params.nodes[0];
+        highlightComponent(nodeId);
+        showDetail(nodeId);
       } else {
+        clearHighlight();
         document.getElementById('detail').style.display = 'none';
       }
     });
