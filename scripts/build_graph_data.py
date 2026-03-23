@@ -58,16 +58,13 @@ REL_LABEL = {
 edges = []
 seen  = set()
 
-for it in items:
-    src  = it.get("persistentId")
-    if not src:
-        continue
-    for r in it.get("relatedItems", []):
+def collect_edges(src, related_items):
+    """Add canonical edges from src to each item in related_items."""
+    for r in related_items:
         tgt  = r.get("persistentId")
         code = r.get("relation", {}).get("code", "")
         if not tgt or not code:
             continue
-        # Skip if this is the inverse direction (already captured from the other side)
         if code in INVERSE:
             continue
         key = (src, tgt, code)
@@ -80,6 +77,19 @@ for it in items:
             "label": REL_LABEL.get(code, code),
             "code":  code,
         })
+
+for it in items:
+    src = it.get("persistentId")
+    if not src:
+        continue
+    # Item-level relations
+    collect_edges(src, it.get("relatedItems", []))
+    # Step-level relations: attribute to parent workflow
+    for step in (it.get("composedOf") or []):
+        collect_edges(src, step.get("relatedItems") or [])
+        # Sub-steps (nested composedOf)
+        for substep in (step.get("composedOf") or []):
+            collect_edges(src, substep.get("relatedItems") or [])
 
 # ── Compute node degree ───────────────────────────────────────────────────────
 degree = collections.Counter()
