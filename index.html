@@ -9,6 +9,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
     <script src="https://cdn.jsdelivr.net/npm/date-fns@4.1.0/cdn.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 
     <style>
         body { background: #f8f9fa; font-size: 0.9rem; }
@@ -31,8 +33,7 @@
         #dataTable th, #sourceDataTable th { background: #f2f2f2; }
         .highlight td { background: #fff3cd; }
         .chart-wrap { position: relative; }
-        #hitsChartScroll { overflow-x: auto; overflow-y: hidden; height: 300px; }
-        #hitsChartWrap   { height: 300px; min-width: 100%; }
+        #hitsChartWrap { height: 300px; }
         #pieChartWrap   { height: 260px; }
         #donutChartWrap { height: 260px; }
     </style>
@@ -102,11 +103,13 @@
     <div class="row g-2 mb-2">
         <div class="col-lg-8">
             <div class="chart-box h-100">
-                <div class="fw-semibold mb-1" style="font-size:0.82rem">Items over time</div>
-                <div id="hitsChartScroll">
-                    <div class="chart-wrap" id="hitsChartWrap">
-                        <canvas id="hitsChart"></canvas>
-                    </div>
+                <div class="d-flex align-items-center mb-1">
+                    <span class="fw-semibold" style="font-size:0.82rem">Items over time</span>
+                    <span class="text-muted ms-2" style="font-size:0.72rem">scroll to zoom &middot; drag to pan</span>
+                    <button id="resetZoom" class="btn btn-sm btn-outline-secondary ms-auto py-0 px-2" style="font-size:0.75rem">Reset zoom</button>
+                </div>
+                <div class="chart-wrap" id="hitsChartWrap">
+                    <canvas id="hitsChart"></canvas>
                 </div>
             </div>
         </div>
@@ -298,13 +301,8 @@ function renderCategoryDonut(latest) {
 }
 
 function renderLineChart(data) {
-    // Give each data point at least 8 px so the chart never gets squashed
-    const scroll = document.getElementById('hitsChartScroll');
-    const wrap   = document.getElementById('hitsChartWrap');
-    wrap.style.width = Math.max(data.length * 8, scroll.clientWidth) + 'px';
-
-    const ctx = document.getElementById('hitsChart').getContext('2d');
-    new Chart(ctx, {
+    const ctx   = document.getElementById('hitsChart').getContext('2d');
+    const chart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: data.map(d => new Date(d.timestamp * 1000)),
@@ -322,9 +320,23 @@ function renderLineChart(data) {
             scales: {
                 x: { type:'time', time:{ unit:'day', stepSize:1, tooltipFormat:'PPpp' }, title:{ display:true, text:'Date' } },
                 y: { beginAtZero:true, title:{ display:true, text:'Items' } }
+            },
+            plugins: {
+                zoom: {
+                    zoom: {
+                        wheel: { enabled: true },
+                        pinch: { enabled: true },
+                        mode: 'x'
+                    },
+                    pan: {
+                        enabled: true,
+                        mode: 'x'
+                    }
+                }
             }
         }
     });
+    document.getElementById('resetZoom').addEventListener('click', () => chart.resetZoom());
 }
 
 async function fetchAllData() {
