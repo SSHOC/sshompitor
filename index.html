@@ -5,399 +5,364 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SSHOMPitor</title>
 
-    <!-- Chart.js -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-    <!-- Chart.js adapter for date-fns to handle time scales -->
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
-
-    <!-- date-fns for date formatting -->
     <script src="https://cdn.jsdelivr.net/npm/date-fns@4.1.0/cdn.min.js"></script>
 
     <style>
-        #container {
-            display: flex;
-            justify-content: space-between;
-        }
-
-        #chartContainer {
-            width: 60%;
-            height: 50vh;
-        }
-        canvas {
-            width: 100% !important;
-            height: 100% !important;
-        }
-
-        #dataTable {
-            width: 35%;
-            border-collapse: collapse;
-        }
-
-        #dataTable th, #dataTable td {
-            border: 1px solid black;
-            padding: 8px;
-            text-align: left;
-        }
-
-        #dataTable th {
-            background-color: #f2f2f2;
-        }
-
-        /* Green for positive changes, red for negative */
-        .positive {
-            background-color: #c8e6c9; /* light green */
-        }
-
-        .negative {
-            background-color: #ffcdd2; /* light red */
-        }
-
-        #sourcePieContainer {
-            display: flex;
-            justify-content: space-between;
-            margin-top: 30px;
-        }
-
-        #pieChartContainer {
-            width: 45%;
-        }
-
-        #sourceDataTable {
-            width: 50%;
-            border-collapse: collapse;
-        }
-
-        #sourceDataTable th, #sourceDataTable td {
-            border: 1px solid black;
-            padding: 8px;
-            text-align: left;
-        }
-
-        #sourceDataTable th {
-            background-color: #f2f2f2;
-        }
+        body { background: #f8f9fa; font-size: 0.9rem; }
+        .chart-box { background: #fff; border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 12px; }
+        .stat-card { border-left: 3px solid; border-radius: 6px; background: #fff;
+                     box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 10px 14px; }
+        .stat-card.total       { border-color: #212529; }
+        .stat-card.tools       { border-color: #1000ff; }
+        .stat-card.dataset     { border-color: #119f04; }
+        .stat-card.publication { border-color: #c80000; }
+        .stat-card.training    { border-color: #ebdc00; }
+        .stat-card.workflow    { border-color: #8b00e6; }
+        .stat-num { font-size: 1.6rem; font-weight: 700; line-height: 1.1; }
+        .stat-lbl { font-size: 0.72rem; color: #6c757d; margin-top: 2px; }
+        .positive { background-color: #c8e6c9; }
+        .negative { background-color: #ffcdd2; }
+        #dataTable, #sourceDataTable { border-collapse: collapse; width: 100%; font-size: 0.82rem; }
+        #dataTable th, #dataTable td,
+        #sourceDataTable th, #sourceDataTable td { border: 1px solid #dee2e6; padding: 5px 8px; }
+        #dataTable th, #sourceDataTable th { background: #f2f2f2; }
+        .highlight td { background: #fff3cd; }
+        .chart-wrap { position: relative; }
+        #hitsChartScroll { overflow-x: auto; overflow-y: hidden; height: 300px; }
+        #hitsChartWrap   { height: 300px; min-width: 100%; }
+        #pieChartWrap   { height: 260px; }
+        #donutChartWrap { height: 260px; }
     </style>
 </head>
 <body>
-    <h1>Total number of items in the SSHOMP</h1>
 
-    <div id="container">
-        <div id="chartContainer">
-            <canvas id="hitsChart"></canvas>
+<!-- Navbar -->
+<nav class="navbar navbar-dark bg-dark px-3 py-2 mb-3">
+    <span class="navbar-brand fw-semibold mb-0">SSHOMPitor</span>
+    <div class="d-flex gap-2">
+        <a href="dashboard_output/metadata_dashboard_table.html"
+           class="btn btn-sm btn-outline-light" target="_blank">
+            Metadata Dashboard ↗
+        </a>
+        <a href="dashboard_output/curation_dashboard.html"
+           class="btn btn-sm btn-outline-warning" target="_blank">
+            Curation Dashboard ↗
+        </a>
+    </div>
+</nav>
+
+<div class="container-fluid px-3">
+
+    <!-- Stat cards -->
+    <div class="row g-2 mb-2">
+        <div class="col-6 col-md-2">
+            <div class="stat-card total h-100">
+                <div class="stat-num" id="stat-total">—</div>
+                <div class="stat-lbl">Total items</div>
+            </div>
         </div>
-
-        <table id="dataTable">
-            <caption>Change in items (1-day, 7-day, 30-day)</caption>
-            <thead>
-                <tr>
-                    <th>Metric</th>
-                    <th>1-day</th>
-                    <th>7-day</th>
-                    <th>30-day</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
+        <div class="col-6 col-md-2">
+            <div class="stat-card tools h-100">
+                <div class="stat-num" id="stat-tools" style="color:#1000ff">—</div>
+                <div class="stat-lbl">Tools &amp; Services</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="stat-card dataset h-100">
+                <div class="stat-num" id="stat-datasets" style="color:#119f04">—</div>
+                <div class="stat-lbl">Datasets</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="stat-card publication h-100">
+                <div class="stat-num" id="stat-pubs" style="color:#c80000">—</div>
+                <div class="stat-lbl">Publications</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="stat-card training h-100">
+                <div class="stat-num" id="stat-training" style="color:#9a9000">—</div>
+                <div class="stat-lbl">Training Materials</div>
+            </div>
+        </div>
+        <div class="col-6 col-md-2">
+            <div class="stat-card workflow h-100">
+                <div class="stat-num" id="stat-workflows" style="color:#8b00e6">—</div>
+                <div class="stat-lbl">Workflows</div>
+            </div>
+        </div>
     </div>
 
-    <!-- New Pie Chart and Table Section -->
-    <div id="sourcePieContainer">
-        <div id="pieChartContainer">
-            <canvas id="sourcePieChart"></canvas>
-        </div>
+    <div class="text-end text-muted mb-2" style="font-size:0.75rem" id="last-updated"></div>
 
-        <table id="sourceDataTable">
-            <caption>Items per Source</caption>
-            <thead>
-                <tr>
-                    <th>Source</th>
-                    <th>Items</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
+    <!-- Line chart + changes table -->
+    <div class="row g-2 mb-2">
+        <div class="col-lg-8">
+            <div class="chart-box h-100">
+                <div class="fw-semibold mb-1" style="font-size:0.82rem">Items over time</div>
+                <div id="hitsChartScroll">
+                    <div class="chart-wrap" id="hitsChartWrap">
+                        <canvas id="hitsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="chart-box h-100">
+                <table id="dataTable">
+                    <caption class="fw-semibold text-dark text-start mb-1" style="caption-side:top;font-size:0.82rem">Change in item counts</caption>
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>1 day</th>
+                            <th>7 days</th>
+                            <th>30 days</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
+    <!-- Source pie + source table + category donut -->
+    <div class="row g-2 mb-3">
+        <div class="col-md-4">
+            <div class="chart-box h-100">
+                <div class="fw-semibold mb-1" style="font-size:0.82rem">Items by source</div>
+                <div class="chart-wrap" id="pieChartWrap">
+                    <canvas id="sourcePieChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="chart-box h-100">
+                <table id="sourceDataTable">
+                    <caption class="fw-semibold text-dark text-start mb-1" style="caption-side:top;font-size:0.82rem">Items per source (latest)</caption>
+                    <thead>
+                        <tr><th>Source</th><th>Items</th></tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="chart-box h-100">
+                <div class="fw-semibold mb-1" style="font-size:0.82rem">Items by category</div>
+                <div class="chart-wrap" id="donutChartWrap">
+                    <canvas id="categoryDonutChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
 
-    <script>
-         async function fetchJSON(file) {
-            const response = await fetch(file);
-            if (!response.ok) {
-                console.error("Error fetching " + file);
-                return null;
-            }
-            return await response.json();
-        }
-    // Calculate the change from the latest data point
-    function calculateDifference(data, days) {
-        const SECONDS_IN_A_DAY = days * 24 * 60 * 60;  // Number of seconds in the given number of days
-        const latest = data[data.length - 1];  // Most recent data point
-        const targetTimestamp = latest.timestamp - SECONDS_IN_A_DAY;  // Target timestamp X days before the latest
+</div><!-- /container -->
 
-        // Find the closest data point that is before or equal to the target timestamp
-        let target = null;
-        for (let i = data.length - 1; i >= 0; i--) {
-            if (data[i].timestamp <= targetTimestamp) {
-                target = data[i];
-                break;
-            }
-        }
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+async function fetchJSON(file) {
+    const response = await fetch(file);
+    if (!response.ok) { console.error('Error fetching ' + file); return null; }
+    return await response.json();
+}
 
-        if (!target) return null;  // If no data exists for that time frame
-
-        // Calculate the total dynamically based on the fields
-        const latestTotal = latest.dataset + latest.trainingMaterial + latest.publication + latest.workflow + latest.toolOrService;
-        const targetTotal = target.dataset + target.trainingMaterial + target.publication + target.workflow + target.toolOrService;
-
-        return {
-            dataset: latest.dataset - target.dataset,
-            trainingMaterial: latest.trainingMaterial - target.trainingMaterial,
-            publication: latest.publication - target.publication,
-            workflow: latest.workflow - target.workflow,
-            toolOrService: latest.toolOrService - target.toolOrService,
-            total: latestTotal - targetTotal  // Calculate the difference in total
-        };
+function calculateDifference(data, days) {
+    const SECONDS = days * 86400;
+    const latest = data[data.length - 1];
+    const targetTs = latest.timestamp - SECONDS;
+    let target = null;
+    for (let i = data.length - 1; i >= 0; i--) {
+        if (data[i].timestamp <= targetTs) { target = data[i]; break; }
     }
+    if (!target) return null;
+    const latestTotal = latest.dataset + latest.trainingMaterial + latest.publication + latest.workflow + latest.toolOrService;
+    const targetTotal = target.dataset + target.trainingMaterial + target.publication + target.workflow + target.toolOrService;
+    return {
+        dataset:         latest.dataset         - target.dataset,
+        trainingMaterial:latest.trainingMaterial - target.trainingMaterial,
+        publication:     latest.publication      - target.publication,
+        workflow:        latest.workflow          - target.workflow,
+        toolOrService:   latest.toolOrService     - target.toolOrService,
+        total:           latestTotal - targetTotal
+    };
+}
 
-    // Populate the table with changes
-    function populateTable(latest, changes1Day, changes7Day, changes30Day) {
-        const tableBody = document.querySelector('#dataTable tbody');
-        tableBody.innerHTML = '';  // Clear existing rows
+function populateStatCards(latest) {
+    document.getElementById('stat-total').textContent    = (latest.dataset + latest.trainingMaterial + latest.publication + latest.workflow + latest.toolOrService).toLocaleString();
+    document.getElementById('stat-tools').textContent    = latest.toolOrService.toLocaleString();
+    document.getElementById('stat-datasets').textContent = latest.dataset.toLocaleString();
+    document.getElementById('stat-pubs').textContent     = latest.publication.toLocaleString();
+    document.getElementById('stat-training').textContent = latest.trainingMaterial.toLocaleString();
+    document.getElementById('stat-workflows').textContent= latest.workflow.toLocaleString();
+    const d = new Date(latest.timestamp * 1000);
+    document.getElementById('last-updated').textContent  =
+        'Last updated: ' + d.toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' });
+}
 
-        const metrics = ['dataset', 'trainingMaterial', 'publication', 'workflow', 'toolOrService', 'total'];
-        const labels = ['Dataset', 'Training Material', 'Publication', 'Workflow', 'Tool or Service', 'Total'];
-
-        metrics.forEach((metric, index) => {
-            const row = document.createElement('tr');
-            const labelCell = document.createElement('td');
-            labelCell.textContent = labels[index];
-
-            const createCell = (change, value) => {
-                const cell = document.createElement('td');
-                if (change === null) {
-                    cell.textContent = 'N/A';
-                } else {
-                    cell.textContent = value !== undefined ? value : change;
-                    cell.className = change > 0 ? 'positive' : (change < 0 ? 'negative' : '');
-                }
-                return cell;
-            };
-
-            row.appendChild(labelCell);
-            row.appendChild(createCell(changes1Day ? changes1Day[metric] : null));
-            row.appendChild(createCell(changes7Day ? changes7Day[metric] : null));
-            row.appendChild(createCell(changes30Day ? changes30Day[metric] : null));
-
-            tableBody.appendChild(row);
-        });
-    }
-
-     // Populate the source table with sorted data and highlight "User-created items"
-    function populateSourceTable(sourceData, userCreatedItems) {
-        const tableBody = document.querySelector('#sourceDataTable tbody');
-        tableBody.innerHTML = '';  // Clear existing rows
-
-        // Convert sourceData object to array of [source, itemCount] and sort by item count in descending order
-        const sortedSourceData = Object.entries(sourceData).sort((a, b) => b[1] - a[1]);
-
-        // Populate table with sorted source data
-        sortedSourceData.forEach(([source, itemCount]) => {
-            const row = document.createElement('tr');
-            const labelCell = document.createElement('td');
-            labelCell.textContent = source;
-
-            const valueCell = document.createElement('td');
-            valueCell.textContent = typeof itemCount === 'number' ? itemCount : 'N/A';
-
-            row.appendChild(labelCell);
-            row.appendChild(valueCell);
-            tableBody.appendChild(row);
-        });
-
-        // Add "User-created items" row, and highlight it with a special class
+function populateTable(latest, c1, c7, c30) {
+    const tbody = document.querySelector('#dataTable tbody');
+    tbody.innerHTML = '';
+    const metrics = ['toolOrService','dataset','publication','trainingMaterial','workflow','total'];
+    const labels  = ['Tool or Service','Dataset','Publication','Training Material','Workflow','Total'];
+    metrics.forEach((m, i) => {
         const row = document.createElement('tr');
-        row.classList.add('highlight');  // Add a class for highlighting the row
+        const lbl = document.createElement('td');
+        lbl.textContent = labels[i];
+        const mkCell = ch => {
+            const td = document.createElement('td');
+            if (ch === null) { td.textContent = 'N/A'; return td; }
+            const v = ch[m];
+            td.textContent = (v > 0 ? '+' : '') + v;
+            td.className = v > 0 ? 'positive' : (v < 0 ? 'negative' : '');
+            return td;
+        };
+        row.appendChild(lbl);
+        row.appendChild(mkCell(c1));
+        row.appendChild(mkCell(c7));
+        row.appendChild(mkCell(c30));
+        tbody.appendChild(row);
+    });
+}
 
-        const labelCell = document.createElement('td');
-        labelCell.textContent = 'User-created items';
+function populateSourceTable(sourceData, userCreated) {
+    const tbody = document.querySelector('#sourceDataTable tbody');
+    tbody.innerHTML = '';
+    Object.entries(sourceData).sort((a,b) => b[1] - a[1]).forEach(([src, n]) => {
+        const row = document.createElement('tr');
+        const a = document.createElement('td'); a.textContent = src;
+        const b = document.createElement('td'); b.textContent = typeof n === 'number' ? n.toLocaleString() : 'N/A';
+        row.appendChild(a); row.appendChild(b);
+        tbody.appendChild(row);
+    });
+    // User-created row
+    const row = document.createElement('tr');
+    row.classList.add('highlight');
+    const a = document.createElement('td'); a.textContent = 'User-created items';
+    const b = document.createElement('td'); b.textContent = isNaN(userCreated) ? 'N/A' : userCreated.toLocaleString();
+    row.appendChild(a); row.appendChild(b);
+    tbody.appendChild(row);
+}
 
-        const valueCell = document.createElement('td');
-        valueCell.textContent = isNaN(userCreatedItems) ? 'N/A' : userCreatedItems;
-
-        row.appendChild(labelCell);
-        row.appendChild(valueCell);
-        tableBody.appendChild(row);
-    }
-
-    // Render the pie chart with sorted data and highlight "User-created items"
-    function renderPieChart(sourceData, userCreatedItems) {
-        const ctx = document.getElementById('sourcePieChart').getContext('2d');
-
-        // Convert sourceData object to array and sort it by item count in descending order
-        const sortedSourceData = Object.entries(sourceData).sort((a, b) => b[1] - a[1]);
-
-        // Create labels and data values arrays, and append "User-created items" at the end
-        const labels = [...sortedSourceData.map(([source]) => source), 'User-created items'];
-        const dataValues = [...sortedSourceData.map(([, itemCount]) => typeof itemCount === 'number' ? itemCount : 0), userCreatedItems];
-
-        const backgroundColors = [
-            ...sortedSourceData.map(() => 'rgba(54, 162, 235, 0.2)'),  // Regular sources color
-            'rgba(255, 99, 132, 0.5)'  // Special color for "User-created items"
-        ];
-
-        const borderColors = [
-            ...sortedSourceData.map(() => 'rgba(54, 162, 235, 1)'),  // Regular sources color
-            'rgba(255, 99, 132, 1)'  // Special color for "User-created items"
-        ];
-
-        const pieChart = new Chart(ctx, {
-            type: 'pie',
-            data: {
-                labels: labels,
-                datasets: [{
-                    data: dataValues,
-                    backgroundColor: backgroundColors,
-                    borderColor: borderColors,
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { position: 'top' },
-                    tooltip: { callbacks: { label: context => `${context.label}: ${context.raw} items` } }
-                }
+function renderPieChart(sourceData, userCreated) {
+    const ctx = document.getElementById('sourcePieChart').getContext('2d');
+    const sorted = Object.entries(sourceData).sort((a,b) => b[1] - a[1]);
+    const palette = [
+        '#4e79a7','#f28e2b','#e15759','#76b7b2','#59a14f',
+        '#edc948','#b07aa1','#ff9da7','#9c755f','#bab0ac'
+    ];
+    new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: [...sorted.map(([s]) => s), 'User-created'],
+            datasets: [{
+                data: [...sorted.map(([,n]) => n), userCreated],
+                backgroundColor: [...sorted.map((_,i) => palette[i % palette.length]), 'rgba(255,99,132,0.6)'],
+                borderColor: '#fff',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+                tooltip: { callbacks: { label: c => `${c.label}: ${c.raw.toLocaleString()}` } }
             }
-        });
-    }
+        }
+    });
+}
 
-
-    function renderChart(data) {
-        const ctx = document.getElementById('hitsChart').getContext('2d');
-        const chart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: data.map(d => new Date(d.timestamp * 1000)),
-                datasets: [
-                    {
-                        label: 'Total Items',
-                        data: data.map(d => d.total),
-                        borderColor: 'rgba(0, 0, 0, 1)',
-                        backgroundColor: 'rgba(0, 0, 0, 0.1)',
-                        fill: true,
-                        tension: 0.1
-                    },
-                    {
-                        label: 'Dataset',
-                        data: data.map(d => d.dataset),
-                        borderColor: 'rgba(17, 159, 4, 1)',
-                        backgroundColor: 'rgba(17, 159, 4, 0.1)',
-                        fill: true,
-                        tension: 0.1
-                    },
-                    {
-                        label: 'Training Material',
-                        data: data.map(d => d.trainingMaterial),
-                        borderColor: 'rgba(235, 220, 0, 1)',
-                        backgroundColor: 'rgba(235, 220, 0, 0.1)',
-                        fill: true,
-                        tension: 0.1
-                    },
-                    {
-                        label: 'Publication',
-                        data: data.map(d => d.publication),
-                        borderColor: 'rgba(200, 0, 0, 1)',
-                        backgroundColor: 'rgba(200, 0, 0, 0.1)',
-                        fill: true,
-                        tension: 0.1
-                    },
-                    {
-                        label: 'Workflow',
-                        data: data.map(d => d.workflow),
-                        borderColor: 'rgba(139, 0, 230, 0.8)',
-                        backgroundColor: 'rgba(139, 0, 230, 0.1)',
-                        fill: true,
-                        tension: 0.1
-                    },
-                    {
-                        label: 'Tool or Service',
-                        data: data.map(d => d.toolOrService),
-                        borderColor: 'rgba(16, 0, 255, 1)',
-                        backgroundColor: 'rgba(16, 0, 255, 0.1)',
-                        fill: true,
-                        tension: 0.1
-                    }
-                ]
-            },
-            options: {
-                scales: {
-                    x: {
-                        type: 'time',
-                        time: { unit: 'day', stepSize: 1, tooltipFormat: 'PPpp' },
-                        title: { display: true, text: 'Date' }
-                    },
-                    y: {
-                        beginAtZero: true,
-                        title: { display: true, text: 'Total Number of Items' }
-                    }
-                },
-                responsive: true,
-                maintainAspectRatio: false
+function renderCategoryDonut(latest) {
+    const ctx = document.getElementById('categoryDonutChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Tools & Services','Datasets','Publications','Training Materials','Workflows'],
+            datasets: [{
+                data: [latest.toolOrService, latest.dataset, latest.publication, latest.trainingMaterial, latest.workflow],
+                backgroundColor: ['rgba(16,0,255,0.75)','rgba(17,159,4,0.75)','rgba(200,0,0,0.75)','rgba(235,220,0,0.85)','rgba(139,0,230,0.75)'],
+                borderColor: '#fff',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+                tooltip: { callbacks: { label: c => `${c.label}: ${c.raw.toLocaleString()}` } }
             }
-        });
-    }
+        }
+    });
+}
+
+function renderLineChart(data) {
+    // Give each data point at least 8 px so the chart never gets squashed
+    const scroll = document.getElementById('hitsChartScroll');
+    const wrap   = document.getElementById('hitsChartWrap');
+    wrap.style.width = Math.max(data.length * 8, scroll.clientWidth) + 'px';
+
+    const ctx = document.getElementById('hitsChart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.map(d => new Date(d.timestamp * 1000)),
+            datasets: [
+                { label: 'Total',             data: data.map(d => d.total),           borderColor:'rgba(0,0,0,1)',         backgroundColor:'rgba(0,0,0,0.08)',     fill:true, tension:0.1 },
+                { label: 'Tools & Services',  data: data.map(d => d.toolOrService),   borderColor:'rgba(16,0,255,1)',       backgroundColor:'rgba(16,0,255,0.07)',  fill:true, tension:0.1 },
+                { label: 'Dataset',           data: data.map(d => d.dataset),          borderColor:'rgba(17,159,4,1)',      backgroundColor:'rgba(17,159,4,0.07)',  fill:true, tension:0.1 },
+                { label: 'Publication',       data: data.map(d => d.publication),      borderColor:'rgba(200,0,0,1)',       backgroundColor:'rgba(200,0,0,0.07)',   fill:true, tension:0.1 },
+                { label: 'Training Material', data: data.map(d => d.trainingMaterial), borderColor:'rgba(235,220,0,1)',     backgroundColor:'rgba(235,220,0,0.07)', fill:true, tension:0.1 },
+                { label: 'Workflow',          data: data.map(d => d.workflow),          borderColor:'rgba(139,0,230,0.9)',   backgroundColor:'rgba(139,0,230,0.07)',fill:true, tension:0.1 }
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+                x: { type:'time', time:{ unit:'day', stepSize:1, tooltipFormat:'PPpp' }, title:{ display:true, text:'Date' } },
+                y: { beginAtZero:true, title:{ display:true, text:'Items' } }
+            }
+        }
+    });
+}
 
 async function fetchAllData() {
-        const itemsData = await fetchJSON('items.json');
-        const sourcesData = await fetchJSON('sources.json');
+    const itemsData   = await fetchJSON('items.json');
+    const sourcesData = await fetchJSON('sources.json');
+    if (!itemsData || !sourcesData) return [];
 
-        if (!itemsData || !sourcesData) return [];
+    const latestTs   = Object.keys(sourcesData).sort().pop();
+    const sourceItems = sourcesData[latestTs];
 
-        // Get the latest timestamp from sources.json and extract the source items
-        const latestTimestamp = Object.keys(sourcesData).sort().pop();  // Get the latest timestamp
-        const sourceItems = sourcesData[latestTimestamp];  // Extract the actual source data
+    const hitsData = Object.keys(itemsData).map(ts => {
+        const c = itemsData[ts];
+        return {
+            timestamp:       parseInt(ts),
+            dataset:         c['datasets'],
+            trainingMaterial:c['training-materials'],
+            publication:     c['publications'],
+            workflow:        c['workflows'],
+            toolOrService:   c['tools-services'],
+            total:           c['datasets'] + c['training-materials'] + c['publications'] + c['workflows'] + c['tools-services']
+        };
+    });
+    if (hitsData.length < 1) return;
 
-        const hitsData = Object.keys(itemsData).map(timestamp => {
-            const categories = itemsData[timestamp];
-            return {
-                timestamp: parseInt(timestamp),
-                dataset: categories['datasets'],
-                trainingMaterial: categories['training-materials'],
-                publication: categories['publications'],
-                workflow: categories['workflows'],
-                toolOrService: categories['tools-services'],
-                total: (categories['datasets'] + categories['training-materials'] + categories['publications'] + categories['workflows'] + categories['tools-services'])
+    const latest = hitsData[hitsData.length - 1];
+    populateStatCards(latest);
+    populateTable(latest, calculateDifference(hitsData,1), calculateDifference(hitsData,7), calculateDifference(hitsData,30));
 
-            };
-        });
+    const totalSourceItems = Object.values(sourceItems).reduce((s,n) => s + (typeof n==='number' ? n : 0), 0);
+    const userCreated      = latest.total - totalSourceItems;
+    populateSourceTable(sourceItems, userCreated);
+    renderPieChart(sourceItems, userCreated);
+    renderCategoryDonut(latest);
 
-        if (hitsData.length < 1) return;
+    return hitsData;
+}
 
-        const changes1Day = calculateDifference(hitsData, 1);
-        const changes7Day = calculateDifference(hitsData, 7);
-        const changes30Day = calculateDifference(hitsData, 30);
-
-        // Populate table with the differences from the latest data point
-        populateTable(hitsData[hitsData.length - 1], changes1Day, changes7Day, changes30Day);
-
-        // Calculate total items from the latest entry in items.json
-        const totalItems = hitsData[hitsData.length - 1].total;
-
-        // Ensure all source values are numbers and sum them
-        const totalSourceItems = Object.values(sourceItems).reduce((sum, count) => sum + (typeof count === 'number' ? count : 0), 0);
-
-        // Calculate "User-created items" (items without a source)
-        const userCreatedItems = totalItems - totalSourceItems;
-
-        // Populate the source table and render the pie chart
-        populateSourceTable(sourceItems, userCreatedItems);
-        renderPieChart(sourceItems, userCreatedItems);
-
-        return hitsData;
-    }
-
-    fetchAllData().then(renderChart);
+fetchAllData().then(renderLineChart);
 </script>
 
 </body>
