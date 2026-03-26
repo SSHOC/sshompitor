@@ -97,13 +97,11 @@ for e in edges:
     degree[e["from"]] += 1
     degree[e["to"]]   += 1
 
-# ── Filter to nodes that appear in at least one edge ────────────────────────
-active_ids = set(degree.keys())
+# ── All nodes, degree 0 for isolated ones ────────────────────────────────────
 nodes = []
 for pid, n in node_map.items():
-    if pid in active_ids:
-        n["degree"] = degree[pid]
-        nodes.append(n)
+    n["degree"] = degree[pid]   # 0 if no edges
+    nodes.append(n)
 
 # ── Write output ──────────────────────────────────────────────────────────────
 out_data = {"nodes": nodes, "edges": edges}
