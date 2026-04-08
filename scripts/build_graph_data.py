@@ -39,15 +39,33 @@ for it in items:
         "source":   it.get("source.label") or "user-created",
     }
 
+# ── Build step → parent workflow map ─────────────────────────────────────────
+# Steps are nested in composedOf; they are NOT top-level items.
+# Any relation pointing TO a step should be redirected to the parent workflow.
+step_to_workflow = {}
+
+def register_steps(steps, wf_pid):
+    for step in steps:
+        s_pid = step.get("persistentId")
+        if s_pid:
+            step_to_workflow[s_pid] = wf_pid
+        register_steps(step.get("composedOf") or [], wf_pid)
+
+for it in items:
+    if it.get("category") == "workflow":
+        wf_pid = it.get("persistentId")
+        if wf_pid:
+            register_steps(it.get("composedOf") or [], wf_pid)
+
+print(f"  Step persistentIds mapped to workflows: {len(step_to_workflow)}")
+
 # ── Extract edges (deduplicate inverse pairs) ─────────────────────────────────
-# For each bidirectional pair we keep only one canonical direction.
 INVERSE = {
     "is-related-to":    "relates-to",
     "is-documented-by": "documents",
     "is-extended-by":   "extends",
     "is-mentioned-in":  "mentions",
 }
-# Human-readable label for canonical relation codes
 REL_LABEL = {
     "relates-to": "Relates to",
     "documents":  "Documents",
@@ -59,13 +77,21 @@ edges = []
 seen  = set()
 
 def collect_edges(src, related_items):
-    """Add canonical edges from src to each item in related_items."""
+    """Add canonical edges from src → tgt, redirecting step targets to their workflow."""
     for r in related_items:
         tgt  = r.get("persistentId")
         code = r.get("relation", {}).get("code", "")
         if not tgt or not code:
             continue
         if code in INVERSE:
+            continue
+        # Redirect step target → parent workflow
+        tgt = step_to_workflow.get(tgt, tgt)
+        # Skip if target not a known node (dangling reference)
+        if tgt not in node_map:
+            continue
+        # Skip self-loops (workflow relating to itself via a step)
+        if tgt == src:
             continue
         key = (src, tgt, code)
         if key in seen:
@@ -84,12 +110,12 @@ for it in items:
         continue
     # Item-level relations
     collect_edges(src, it.get("relatedItems", []))
-    # Step-level relations: attribute to parent workflow
-    for step in (it.get("composedOf") or []):
-        collect_edges(src, step.get("relatedItems") or [])
-        # Sub-steps (nested composedOf)
-        for substep in (step.get("composedOf") or []):
-            collect_edges(src, substep.get("relatedItems") or [])
+    # Step relations: walk recursively, attribute all to the parent workflow
+    def walk_steps(steps):
+        for step in steps:
+            collect_edges(src, step.get("relatedItems") or [])
+            walk_steps(step.get("composedOf") or [])
+    walk_steps(it.get("composedOf") or [])
 
 # ── Compute node degree ───────────────────────────────────────────────────────
 degree = collections.Counter()
