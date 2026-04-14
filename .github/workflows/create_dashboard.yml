@@ -47,9 +47,6 @@ jobs:
       - name: Build metadata dashboard
         run: python scripts/visualize_data.py
 
-      - name: Build curation dashboard
-        run: python scripts/create_curation_dashboard.py
-
       - name: Build relations graph data
         run: python scripts/build_graph_data.py
 
