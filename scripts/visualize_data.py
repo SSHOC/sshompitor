@@ -70,7 +70,8 @@ try:
     snapshot_date = datetime.fromtimestamp(int(ts_str), tz=timezone.utc).strftime("%d %b %Y")
 except (ValueError, OSError):
     snapshot_date = ts_str
-gen_date = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+gen_date  = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+snap_slug = snapshot_date.replace(" ", "_")   # e.g. 14_Apr_2026
 
 # --- HTML (plain string; __PLACEHOLDER__ avoids JS-brace conflicts) ---
 HTML = """\
@@ -269,7 +270,8 @@ const dt = $('#resource-table').DataTable({
     { data:'Missing', width:'6%' },
     {
       data:'MissingFields', orderable:false, searchable:true, width:'27%',
-      render: function(data) {
+      render: function(data, type) {
+        if (type === 'export') return Array.isArray(data) ? data.join('; ') : '';
         if (!Array.isArray(data) || !data.length) return '<em class="text-muted">\u2014</em>';
         return '<ul class="miss-list">'
           + data.map(function(f){ return '<li>'+esc(f)+'</li>'; }).join('')
@@ -279,7 +281,8 @@ const dt = $('#resource-table').DataTable({
     { data:'Source', width:'10%' },
     {
       data:'url', orderable:false, searchable:false, width:'4%',
-      render: function(data) {
+      render: function(data, type) {
+        if (type === 'export') return data || '';
         return data
           ? '<a href="'+esc(data)+'" target="_blank" rel="noopener noreferrer" class="mp-link" title="Open in Marketplace">&#8599;</a>'
           : '';
@@ -288,8 +291,20 @@ const dt = $('#resource-table').DataTable({
   ],
   dom: "<'row align-items-center mb-2'<'col-auto'B><'col'f>>rt<'row mt-2'<'col text-muted small'i><'col-auto'p>>",
   buttons: [
-    { extend:'csv',   text:'Export CSV',   className:'btn btn-sm btn-outline-secondary' },
-    { extend:'excel', text:'Export Excel', className:'btn btn-sm btn-outline-secondary' }
+    {
+      extend: 'csv',
+      text: '\u2193 Export CSV',
+      className: 'btn btn-sm btn-primary',
+      filename: 'SSHOMP_metadata_completeness___SNAP_SLUG__',
+      exportOptions: { columns: [0,1,2,3,4,5,6,7], orthogonal: 'export' }
+    },
+    {
+      extend: 'excel',
+      text: '\u2193 Export Excel',
+      className: 'btn btn-sm btn-success',
+      filename: 'SSHOMP_metadata_completeness___SNAP_SLUG__',
+      exportOptions: { columns: [0,1,2,3,4,5,6,7], orthogonal: 'export' }
+    }
   ],
   pageLength: 100,
   order: [[3, 'asc']],
@@ -328,7 +343,8 @@ html = (HTML
     .replace("__AVG_SCORE__",     str(avg_score))
     .replace("__N_COMPLETE__",    str(n_complete))
     .replace("__SNAPSHOT_DATE__", snapshot_date)
-    .replace("__GEN_DATE__",      gen_date))
+    .replace("__GEN_DATE__",      gen_date)
+    .replace("__SNAP_SLUG__",     snap_slug))
 
 out_path = OUT_DIR / "metadata_dashboard_table.html"
 with open(out_path, "w", encoding="utf-8") as fo:
