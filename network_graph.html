@@ -29,6 +29,8 @@
   }
   #detail h6 { font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; }
   #detail .d-label { font-weight: 500; word-break: break-word; }
+  #detail a.d-label { color: inherit; text-decoration: none; }
+  #detail a.d-label:hover { color: #0d6efd; text-decoration: underline; }
   #detail .d-row { display: flex; justify-content: space-between; margin-top: 3px; color: #555; }
   #detail .d-row span:first-child { color: #888; }
 
@@ -91,7 +93,7 @@
 
     <!-- Min-degree -->
     <div class="sidebar-section">
-      <label class="section-title">Min degree: <span id="deg-val">1</span></label>
+      <label class="section-title">Min degree: <span id="deg-val">0</span></label>
       <input id="deg-slider" type="range" class="form-range" min="0" max="20" value="1">
     </div>
 
@@ -121,7 +123,7 @@
     <!-- Detail panel -->
     <div id="detail">
       <h6>Node detail</h6>
-      <div class="d-label" id="d-label"></div>
+      <a class="d-label" id="d-label" href="#" target="_blank" rel="noopener noreferrer"></a>
       <div class="d-row"><span>ID</span>       <span id="d-id"></span></div>
       <div class="d-row"><span>Category</span> <span id="d-cat"></span></div>
       <div class="d-row"><span>Source</span>   <span id="d-src"></span></div>
@@ -332,12 +334,14 @@ function updateStatBar(n, e) {
 function showDetail(nodeId) {
   const raw = allNodes.find(n => n.id === nodeId);
   if (!raw) return;
-  document.getElementById('d-label').textContent = raw.label;
+  const url = 'https://marketplace.sshopencloud.eu/' + raw.category + '/' + raw.id;
+  const labelEl = document.getElementById('d-label');
+  labelEl.textContent = raw.label;
+  labelEl.href        = url;
   document.getElementById('d-id').textContent    = raw.id;
   document.getElementById('d-cat').textContent   = CAT_LABEL[raw.category] || raw.category;
   document.getElementById('d-src').textContent   = raw.source || '—';
   document.getElementById('d-deg').textContent   = raw.degree;
-  const url = 'https://marketplace.sshopencloud.eu/' + raw.category + '/' + raw.id;
   document.getElementById('d-link').href = url;
   document.getElementById('detail').style.display = '';
 }
