@@ -109,6 +109,14 @@
       <div class="chip-list" id="rel-chips"></div>
     </div>
 
+    <!-- Source highlight -->
+    <div class="sidebar-section">
+      <label class="section-title">Highlight source</label>
+      <select id="src-highlight" class="form-select form-select-sm">
+        <option value="">— All sources —</option>
+      </select>
+    </div>
+
     <!-- Legend -->
     <div class="sidebar-section">
       <label class="section-title">Legend</label>
@@ -183,6 +191,7 @@ let activeCats = new Set();
 let activeRels = new Set();
 let minDegree  = 0;
 let highlightActive = false;
+let activeSourceFilter = null;
 
 /* ── helpers ──────────────────────────────────────────────────── */
 function nodeSize(deg) { return Math.max(6, Math.min(30, 6 + deg * 1.5)); }
@@ -301,9 +310,52 @@ function highlightComponent(nodeId) {
     + ' edges  (click background to clear)';
 }
 
+/* ── highlight all nodes from one source ──────────────────────── */
+function highlightBySource(source) {
+  activeSourceFilter = source;
+  highlightActive    = true;
+  const rawMap = Object.fromEntries(allNodes.map(n => [n.id, n]));
+
+  nodesDS.update(nodesDS.get().map(n => {
+    const raw     = rawMap[n.id];
+    const matches = raw && raw.source === source;
+    if (matches) {
+      const col = CAT_COLOR[raw.category] || CAT_DEFAULT;
+      return { id: n.id,
+               color: { background: col, border: '#333',
+                        highlight: { background: '#ffe082', border: '#f57c00' } },
+               font:  { size: 10, color: '#333' },
+               opacity: 1 };
+    }
+    return { id: n.id,
+             color: { background: '#e0e0e0', border: '#ccc',
+                      highlight: { background: '#e0e0e0', border: '#ccc' } },
+             font:  { size: 10, color: '#bbb' },
+             opacity: 0.15 };
+  }));
+
+  edgesDS.update(edgesDS.get().map(e => {
+    const fr = rawMap[e.from], to = rawMap[e.to];
+    if (fr && to && fr.source === source && to.source === source) {
+      const col = REL_COLOR[e._code] || REL_DEFAULT;
+      return { id: e.id, color: { color: col, highlight: col, hover: col }, width: 1.5, opacity: 1 };
+    }
+    return { id: e.id,
+             color: { color: '#e0e0e0', highlight: '#e0e0e0', hover: '#e0e0e0' },
+             width: 0.5, opacity: 0.12 };
+  }));
+
+  const count = allNodes.filter(n => n.source === source).length;
+  document.getElementById('stat-bar').textContent =
+    'Source "' + source + '": ' + count.toLocaleString()
+    + ' nodes highlighted  (click background to clear)';
+}
+
 function clearHighlight() {
   if (!highlightActive) return;
-  highlightActive = false;
+  highlightActive    = false;
+  activeSourceFilter = null;
+  document.getElementById('src-highlight').value = '';
   // Restore all nodes/edges to their normal visNode/visEdge appearance
   const rawMap = Object.fromEntries(allNodes.map(n => [n.id, n]));
   nodesDS.update(nodesDS.get().map(n => {
@@ -480,12 +532,26 @@ fetch('graph.json')
     network.on('click', params => {
       if (params.nodes.length) {
         const nodeId = params.nodes[0];
+        document.getElementById('src-highlight').value = '';
+        activeSourceFilter = null;
         highlightComponent(nodeId);
         showDetail(nodeId);
       } else {
         clearHighlight();
         document.getElementById('detail').style.display = 'none';
       }
+    });
+
+    // ── source highlight dropdown
+    const srcHL = document.getElementById('src-highlight');
+    [...new Set(allNodes.map(n => n.source).filter(Boolean))].sort().forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s; opt.textContent = s;
+      srcHL.appendChild(opt);
+    });
+    srcHL.addEventListener('change', function() {
+      if (this.value) { highlightBySource(this.value); }
+      else            { clearHighlight(); }
     });
 
     // ── degree slider
