@@ -144,11 +144,10 @@
       <div class="d-row"><span>Category</span> <span id="d-cat"></span></div>
       <div class="d-row"><span>Source</span>   <span id="d-src"></span></div>
       <div class="d-row"><span>Degree</span>   <span id="d-deg"></span></div>
-      <div style="margin-top:8px">
-        <a id="d-link" href="#" target="_blank" rel="noopener noreferrer"
-           class="btn btn-sm btn-outline-primary w-100" style="font-size:0.78rem">
-          Open in Marketplace ↗
-        </a>
+      <div class="d-row" style="margin-top:4px">
+        <span>URL</span>
+        <a id="d-url" href="#" target="_blank" rel="noopener noreferrer"
+           style="font-size:0.72em;word-break:break-all;text-align:right;max-width:160px;color:#0d6efd">—</a>
       </div>
     </div>
   </div>
@@ -159,6 +158,13 @@
 </div><!-- /app -->
 
 <script>
+/* ── utils ────────────────────────────────────────────────────── */
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+
 /* ── colour maps ──────────────────────────────────────────────── */
 const CAT_COLOR = {
   'tool-or-service':  '#1000ff',
@@ -442,7 +448,9 @@ function showDetail(nodeId) {
   document.getElementById('d-cat').textContent   = CAT_LABEL[raw.category] || raw.category;
   document.getElementById('d-src').textContent   = raw.source || '—';
   document.getElementById('d-deg').textContent   = raw.degree;
-  document.getElementById('d-link').href = url;
+  const urlEl = document.getElementById('d-url');
+  urlEl.textContent = url;
+  urlEl.href        = url;
   document.getElementById('detail').style.display = '';
 }
 
