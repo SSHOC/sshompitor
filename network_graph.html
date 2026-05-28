@@ -109,6 +109,14 @@
       <div class="chip-list" id="rel-chips"></div>
     </div>
 
+    <!-- Keyword highlight -->
+    <div class="sidebar-section">
+      <label class="section-title">Highlight keyword</label>
+      <input id="kw-search" type="text" class="form-control form-control-sm"
+             placeholder="Type keyword…">
+      <div id="kw-results" style="margin-top:4px; max-height:140px; overflow-y:auto;"></div>
+    </div>
+
     <!-- Source highlight -->
     <div class="sidebar-section">
       <label class="section-title">Highlight source</label>
@@ -190,8 +198,9 @@ let network, nodesDS, edgesDS;
 let activeCats = new Set();
 let activeRels = new Set();
 let minDegree  = 0;
-let highlightActive = false;
+let highlightActive    = false;
 let activeSourceFilter = null;
+let keywordIndex       = {};  // keyword → Set of node IDs (built after data loads)
 
 /* ── helpers ──────────────────────────────────────────────────── */
 function nodeSize(deg) { return Math.max(6, Math.min(30, 6 + deg * 1.5)); }
@@ -310,6 +319,43 @@ function highlightComponent(nodeId) {
     + ' edges  (click background to clear)';
 }
 
+/* ── highlight all nodes sharing a keyword ────────────────────── */
+function highlightByKeyword(keyword) {
+  highlightActive    = true;
+  activeSourceFilter = null;
+  document.getElementById('src-highlight').value = '';
+  const matchIds = keywordIndex[keyword] || new Set();
+  const rawMap   = Object.fromEntries(allNodes.map(n => [n.id, n]));
+
+  nodesDS.update(nodesDS.get().map(n => {
+    if (matchIds.has(n.id)) {
+      const col = CAT_COLOR[rawMap[n.id].category] || CAT_DEFAULT;
+      return { id: n.id,
+               color: { background: col, border: '#333',
+                        highlight: { background: '#ffe082', border: '#f57c00' } },
+               font: { size: 10, color: '#333' }, opacity: 1 };
+    }
+    return { id: n.id,
+             color: { background: '#e0e0e0', border: '#ccc',
+                      highlight: { background: '#e0e0e0', border: '#ccc' } },
+             font: { size: 10, color: '#bbb' }, opacity: 0.15 };
+  }));
+
+  edgesDS.update(edgesDS.get().map(e => {
+    if (matchIds.has(e.from) && matchIds.has(e.to)) {
+      const col = REL_COLOR[e._code] || REL_DEFAULT;
+      return { id: e.id, color: { color: col, highlight: col, hover: col }, width: 1.5, opacity: 1 };
+    }
+    return { id: e.id,
+             color: { color: '#e0e0e0', highlight: '#e0e0e0', hover: '#e0e0e0' },
+             width: 0.5, opacity: 0.12 };
+  }));
+
+  document.getElementById('stat-bar').textContent =
+    'Keyword "' + keyword + '": ' + matchIds.size.toLocaleString()
+    + ' nodes highlighted  (click background to clear)';
+}
+
 /* ── highlight all nodes from one source ──────────────────────── */
 function highlightBySource(source) {
   activeSourceFilter = source;
@@ -356,6 +402,8 @@ function clearHighlight() {
   highlightActive    = false;
   activeSourceFilter = null;
   document.getElementById('src-highlight').value = '';
+  document.getElementById('kw-search').value     = '';
+  document.getElementById('kw-results').innerHTML = '';
   // Restore all nodes/edges to their normal visNode/visEdge appearance
   const rawMap = Object.fromEntries(allNodes.map(n => [n.id, n]));
   nodesDS.update(nodesDS.get().map(n => {
@@ -532,7 +580,9 @@ fetch('graph.json')
     network.on('click', params => {
       if (params.nodes.length) {
         const nodeId = params.nodes[0];
-        document.getElementById('src-highlight').value = '';
+        document.getElementById('src-highlight').value  = '';
+        document.getElementById('kw-search').value      = '';
+        document.getElementById('kw-results').innerHTML = '';
         activeSourceFilter = null;
         highlightComponent(nodeId);
         showDetail(nodeId);
@@ -540,6 +590,40 @@ fetch('graph.json')
         clearHighlight();
         document.getElementById('detail').style.display = 'none';
       }
+    });
+
+    // ── keyword index
+    allNodes.forEach(n => {
+      (n.keywords || []).forEach(kw => {
+        if (!keywordIndex[kw]) keywordIndex[kw] = new Set();
+        keywordIndex[kw].add(n.id);
+      });
+    });
+    // keyword list sorted by popularity (most items first)
+    const allKeywords = Object.entries(keywordIndex)
+      .sort((a, b) => b[1].size - a[1].size)
+      .map(([kw, s]) => ({ kw, count: s.size }));
+
+    document.getElementById('kw-search').addEventListener('input', function() {
+      const q   = this.value.trim().toLowerCase();
+      const box = document.getElementById('kw-results');
+      box.innerHTML = '';
+      if (!q) return;
+      allKeywords.filter(({ kw }) => kw.toLowerCase().includes(q)).slice(0, 10).forEach(({ kw, count }) => {
+        const d = document.createElement('div');
+        d.style.cssText = 'padding:2px 6px;cursor:pointer;font-size:0.78rem;border-radius:3px;'
+                        + 'display:flex;justify-content:space-between;align-items:center';
+        d.onmouseenter = () => d.style.background = '#e9ecef';
+        d.onmouseleave = () => d.style.background = '';
+        d.innerHTML = '<span>' + esc(kw) + '</span>'
+                    + '<span style="color:#aaa;font-size:0.72em;margin-left:6px">' + count + '</span>';
+        d.onclick = () => {
+          highlightByKeyword(kw);
+          document.getElementById('kw-search').value = kw;
+          box.innerHTML = '';
+        };
+        box.appendChild(d);
+      });
     });
 
     // ── source highlight dropdown
@@ -550,6 +634,8 @@ fetch('graph.json')
       srcHL.appendChild(opt);
     });
     srcHL.addEventListener('change', function() {
+      document.getElementById('kw-search').value      = '';
+      document.getElementById('kw-results').innerHTML = '';
       if (this.value) { highlightBySource(this.value); }
       else            { clearHighlight(); }
     });

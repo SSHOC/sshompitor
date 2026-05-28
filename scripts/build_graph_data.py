@@ -32,11 +32,18 @@ for it in items:
     pid = it.get("persistentId")
     if not pid:
         continue
+    keywords = sorted(set(
+        (p.get("concept") or {}).get("label") or (p.get("value") or "")
+        for p in (it.get("properties") or [])
+        if p.get("type", {}).get("code") == "keyword"
+        if (p.get("concept") or {}).get("label") or (p.get("value") or "")
+    ))
     node_map[pid] = {
         "id":       pid,
         "label":    it.get("label", pid),
         "category": it.get("category", ""),
         "source":   it.get("source.label") or "user-created",
+        "keywords": keywords,
     }
 
 # ── Build step → parent workflow map ─────────────────────────────────────────
