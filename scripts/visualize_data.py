@@ -49,14 +49,18 @@ df["url"]            = ("https://marketplace.sshopencloud.eu/"
                         + df["category"].astype(str) + "/"
                         + df["persistentId"].astype(str))
 
+# The MDcheck file holds every item (complete ones have no missing fields);
+# older files only hold incomplete items, in which case n_complete is 0.
+issues = df[df["missing_fields"].apply(len) > 0]
+
 # --- Summary stats ---
-n_items      = len(df)
-n_categories = int(df["category"].nunique())
-avg_score    = round(float(df["score"].mean()), 1) if n_items else 0.0
-n_complete   = int((df["score"] == 100).sum())
+n_items      = len(issues)
+n_categories = int(issues["category"].nunique())
+avg_score    = round(float(df["score"].mean()), 1) if len(df) else 0.0
+n_complete   = int((df["missing_fields"].apply(len) == 0).sum())
 
 # --- Table JSON ---
-table_data = df[["persistentId", "label", "category", "score", "missing_count",
+table_data = issues[["persistentId", "label", "category", "score", "missing_count",
                  "source.label", "url", "missing_fields"]].rename(columns={
     "persistentId":   "ID",
     "source.label":   "Source",
@@ -138,7 +142,7 @@ HTML = """\
   <div class="col-6 col-md-3">
     <div class="card stat-card c-warning h-100 px-3 py-2">
       <div class="fs-3 fw-bold text-warning lh-1 mb-1">__AVG_SCORE__</div>
-      <div class="text-muted small">Average completeness score</div>
+      <div class="text-muted small">Average completeness score (all items)</div>
     </div>
   </div>
   <div class="col-6 col-md-3">

@@ -19,7 +19,7 @@ DATASET_ENTRYPOINTS:
     datasets: api/datasets
     actors: api/actors
     list_of_properties: api/property-types?perpage=100
-    login: /api/auth/sign-in
+    login: api/auth/sign-in
     keyword: api/concept-search?types=keyword&q=
     concepts: api/concept-search
 

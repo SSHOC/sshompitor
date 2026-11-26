@@ -772,9 +772,27 @@ def _has_value(v):
         return v.strip() != ""
     if isinstance(v, (list, tuple, dict, set)):
         return len(v) > 0
-    if isinstance(v, bool):
-        return v
+    if isinstance(v, (bool, np.bool_)):
+        return bool(v)
+    try:
+        # NaN / NaT / pd.NA are how pandas represents nulls after a JSON round-trip
+        if pd.isna(v):
+            return False
+    except (TypeError, ValueError):
+        pass
     return True  # numbers etc.
+
+def _has_field(json_data, field):
+    """
+    True if the item has a value for top-level `field`. Snapshots are flattened
+    with pd.json_normalize, so a nested object such as `thumbnail` only exists as
+    sub-keys ('thumbnail.info.category', ...); any non-empty sub-key counts.
+    """
+    if _has_value(json_data.get(field)):
+        return True
+    prefix = field + "."
+    return any(_has_value(v) for k, v in json_data.items()
+               if isinstance(k, str) and k.startswith(prefix))
 
 def _normalize_item_type(item_type: str) -> str:
     # map common aliases to your canonical keys
@@ -870,14 +888,16 @@ def validate_metadata(json_data, item_type):
     for category, fields in metadata_fields[itype].items():
         if category in {"Categorisation Metadata", "Context Metadata", "Access Metadata", "Technical Metadata", "Bibliographic metadata"}:
             for field in fields:
-                ok = check_property(field)
+                # Usually a property, but some (e.g. tools' `version`) can also be
+                # stored as a top-level item field; either counts as present.
+                ok = check_property(field) or _has_field(json_data, field)
                 results[category][field] = ok
                 if not ok:
                     suggestions.append(f"Add or update '{field}' in {category}.")
         else:
             # Generic fields live at top-level
             for field in fields:
-                ok = _has_value(json_data.get(field))
+                ok = _has_field(json_data, field)
                 results[category][field] = ok
                 if not ok:
                     suggestions.append(f"Add or update '{field}' in {category}.")
@@ -889,15 +909,16 @@ def validate_metadata(json_data, item_type):
 
     return json_data.get("label"), results, suggestions, {}, overall_score
 
-def find_items_missing_profile(df, id_col="persistentId", label_col="label"):
+def find_items_missing_profile(df, id_col="persistentId", label_col="label", include_complete=False):
     """
-    Validate each row against the metadata profile for `item_type` and
+    Validate each row against the metadata profile for its category and
     return rows that miss at least one required field/property.
+    With include_complete=True every item is returned, so complete items
+    (missing_fields == [], score 100) can be counted too.
     """
-    import pandas as pd
-
     if df.empty:
-        return pd.DataFrame(columns=[id_col, label_col, "missing_fields", "score"])
+        return pd.DataFrame(columns=[id_col, label_col, "missing_fields", "score",
+                                     "category", "source.label", "missing_count"])
 
     rows = []
     for _, row in df.iterrows():
@@ -914,18 +935,20 @@ def find_items_missing_profile(df, id_col="persistentId", label_col="label"):
                 if not ok:
                     missing.append(f"{cat}::{f}")
 
-        if missing:
-            rows.append({
-                id_col: row.get(id_col),
-                label_col: label,
-                "missing_fields": missing,
-                "score": score,
-            })
+        if not missing and not include_complete:
+            continue
+        out_row = {
+            id_col: row.get(id_col),
+            label_col: label,
+            "missing_fields": missing,
+            "score": score,
+        }
         # add category and source info if available
         if "category" in row:
-            rows[-1]["category"] = row["category"]
+            out_row["category"] = row["category"]
         if "source.label" in row:
-            rows[-1]["source.label"] = row["source.label"]
+            out_row["source.label"] = row["source.label"]
+        rows.append(out_row)
     out = pd.DataFrame(rows)
     # Optional: sort by worst score first, then number of missing
     if not out.empty:

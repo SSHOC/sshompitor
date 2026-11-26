@@ -26,10 +26,12 @@ else:
     df = pd.read_json(in_path, orient="records")
     print(f"loaded {in_path} with {len(df)} items")
 
-# Items with missing fields and their scores.
-df_missing = hel.find_items_missing_profile(df)
+# Every item with its score and missing fields (empty list for complete items,
+# so the dashboard can count them).
+df_missing = hel.find_items_missing_profile(df, include_complete=True)
 
-print(f"found {len(df_missing)} items for missing profile fields")
+n_incomplete = int((df_missing["missing_count"] > 0).sum()) if not df_missing.empty else 0
+print(f"found {n_incomplete} of {len(df_missing)} items with missing profile fields")
 
 #create output file with timestamp
 out_path = OUT_DIR / OUT_FILE_PATTERN.format(ts_str) #use current timestamp

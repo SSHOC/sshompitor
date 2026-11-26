@@ -35,7 +35,7 @@ sshompitor/
 │   ├── full_items_<ts>.json    # Weekly snapshots (all categories, flat records)
 │   └── processed/
 │       ├── full_items_expanded_<ts>.json   # With prop_counts column added
-│       └── full_items_MDcheck_<ts>.json    # Items with missing fields + score
+│       └── full_items_MDcheck_<ts>.json    # Score + missing fields for every item
 ├── dashboard_output/
 │   └── metadata_dashboard_table_<ts>.html  # Weekly dashboard (committed)
 ├── config.yaml                 # API endpoints and category config
