@@ -23,6 +23,7 @@ sshompitor/
 │   ├── process_props.py        # Expand/flatten properties column
 │   ├── check_recommended_Md.py # Validate metadata completeness per item
 │   ├── visualize_data.py       # Generate HTML dashboard
+│   ├── build_graph_data.py     # Relations → graph.json (+ broken relations)
 │   └── checkURLs.py            # HTTP-check all accessibleAt URLs
 ├── .github/workflows/
 │   ├── weekly-dump.yml         # Fetch + commit snapshot (Mon 03:00 UTC)
@@ -35,7 +36,8 @@ sshompitor/
 │   ├── full_items_<ts>.json    # Weekly snapshots (all categories, flat records)
 │   └── processed/
 │       ├── full_items_expanded_<ts>.json   # With prop_counts column added
-│       └── full_items_MDcheck_<ts>.json    # Score + missing fields for every item
+│       ├── full_items_MDcheck_<ts>.json    # Score + missing fields for every item
+│       └── broken_relations_<ts>.json      # Relations pointing to items not in the snapshot
 ├── dashboard_output/
 │   └── metadata_dashboard_table_<ts>.html  # Weekly dashboard (committed)
 ├── config.yaml                 # API endpoints and category config
@@ -55,8 +57,9 @@ weekly-dump.yml (Mon 03:00 UTC)
 create_dashboard.yml (triggered on dump completion)
   → process_props.py        produces data/processed/full_items_expanded_<ts>.json
   → check_recommended_Md.py produces data/processed/full_items_MDcheck_<ts>.json
-  → visualize_data.py       produces dashboard_output/metadata_dashboard_table_<ts>.html
-  → commits dashboard HTML and MDcheck JSON to main
+  → build_graph_data.py     produces graph.json and data/processed/broken_relations_<ts>.json
+  → visualize_data.py       produces dashboard_output/metadata_dashboard_table.html
+  → commits dashboard HTML, MDcheck JSON, broken relations and graph.json to main
 ```
 
 A fallback schedule (Tuesday 06:00 UTC) covers cases where `workflow_run` is not triggered.

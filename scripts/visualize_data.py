@@ -6,6 +6,7 @@ Generates the metadata completeness HTML dashboard.
 Output: dashboard_output/metadata_dashboard_table.html
 """
 
+import html
 import json
 import pathlib
 from datetime import datetime, timezone
@@ -68,6 +69,44 @@ table_data = issues[["persistentId", "label", "category", "score", "missing_coun
     "missing_fields": "MissingFields",
 })
 table_json = table_data.to_json(orient="records", force_ascii=False)
+
+# --- Broken relations (written by build_graph_data.py for the same snapshot) ---
+CAT_LABEL = {"tool-or-service": "Tool / Service", "dataset": "Dataset", "publication": "Publication",
+             "training-material": "Training Material", "workflow": "Workflow"}
+
+def broken_relations_section(path):
+    if not path.exists():
+        return ""
+    with open(path, "r", encoding="utf-8") as fh:
+        broken = json.load(fh)
+    e = lambda v: html.escape(str(v if v is not None else ""))
+    head = ('<div class="main-card mb-3 p-3">'
+            '<div class="d-flex align-items-center gap-2 mb-2">'
+            '<span class="fw-semibold small">Broken relations</span>'
+            f'<span class="badge rounded-pill {"text-bg-danger" if broken else "text-bg-success"}">{len(broken)}</span>'
+            '<small class="text-muted">Relations that point to items not in the published snapshot '
+            '(deleted, unpublished or never existing)</small></div>')
+    if not broken:
+        return head + '<div class="text-muted small">None in this snapshot.</div></div>'
+    rows = []
+    for b in broken:
+        src_url = f"https://marketplace.sshopencloud.eu/{b['source_category']}/{b['source_id']}"
+        step = ' <span class="text-muted">(in a workflow step)</span>' if b.get("via_step") else ""
+        tcat = CAT_LABEL.get(b.get("target_category"), b.get("target_category") or "")
+        rows.append(
+            "<tr>"
+            f'<td><a href="{e(src_url)}" target="_blank" rel="noopener noreferrer">{e(b["source_label"])}</a>{step}</td>'
+            f'<td class="text-nowrap">{e(b.get("relation_label") or b["relation"])}</td>'
+            f'<td>{e(b.get("target_label") or "—")}'
+            + (f' <span class="text-muted">· {e(tcat)}</span>' if tcat else "") + "</td>"
+            f'<td><code>{e(b["target_id"])}</code></td>'
+            "</tr>")
+    return (head + '<div style="max-height:260px;overflow-y:auto">'
+            '<table class="table table-sm small mb-0"><thead class="table-light text-nowrap"><tr>'
+            '<th>Item</th><th>Relation</th><th>Missing target</th><th>Target ID</th>'
+            '</tr></thead><tbody>' + "".join(rows) + "</tbody></table></div></div>")
+
+broken_section = broken_relations_section(IN_DIR / f"broken_relations_{ts_str}.json")
 
 # --- Timestamps ---
 try:
@@ -164,6 +203,8 @@ HTML = """\
   </div>
   <ul id="miss-chips"></ul>
 </div>
+
+__BROKEN_SECTION__
 
 <!-- Controls + table -->
 <div class="main-card p-3">
@@ -340,7 +381,8 @@ $('#clear-filters-btn').on('click', function(){
 </html>
 """
 
-html = (HTML
+page = (HTML
+    .replace("__BROKEN_SECTION__", broken_section)
     .replace("__TABLE_JSON__",    table_json)
     .replace("__N_ITEMS__",       str(n_items))
     .replace("__N_CATS__",        str(n_categories))
@@ -352,6 +394,6 @@ html = (HTML
 
 out_path = OUT_DIR / "metadata_dashboard_table.html"
 with open(out_path, "w", encoding="utf-8") as fo:
-    fo.write(html)
+    fo.write(page)
 
 print(f"Wrote dashboard to: {out_path}")

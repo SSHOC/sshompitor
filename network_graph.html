@@ -15,35 +15,47 @@
   #sidebar {
     width: 240px; min-width: 200px; background: #fff;
     border-right: 1px solid #dee2e6; overflow-y: auto;
-    padding: 10px 12px; flex-shrink: 0;
+    padding: 10px 12px; flex-shrink: 0; transition: opacity .2s;
   }
+  #sidebar.busy { opacity: .5; pointer-events: none; }
   #graph-wrap { flex: 1; position: relative; }
   #graph { width: 100%; height: 100%; }
+  #graph .vis-network:focus { outline: none; }
 
   /* ── detail panel ── */
   #detail {
-    position: absolute; bottom: 12px; right: 12px; width: 260px;
+    position: absolute; bottom: 12px; right: 12px; width: 300px;
+    max-height: calc(100% - 24px); overflow-y: auto;
     background: #fff; border-radius: 6px;
     box-shadow: 0 2px 8px rgba(0,0,0,.15);
     padding: 12px; display: none; z-index: 10; font-size: 0.82rem;
   }
-  #detail h6 { font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; }
-  #detail .d-label { font-weight: 500; word-break: break-word; }
-  #detail a.d-label { color: inherit; text-decoration: none; }
+  #detail .d-head { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 6px; }
+  #detail .d-head .btn-close { font-size: 0.6rem; margin-top: 3px; flex-shrink: 0; }
+  #detail a.d-label { font-weight: 600; word-break: break-word; color: inherit; text-decoration: none; flex: 1; }
   #detail a.d-label:hover { color: #0d6efd; text-decoration: underline; }
-  #detail .d-row { display: flex; justify-content: space-between; margin-top: 3px; color: #555; }
-  #detail .d-row span:first-child { color: #888; }
+  #detail .d-row { display: flex; justify-content: space-between; gap: 8px; margin-top: 3px; color: #555; }
+  #detail .d-row span:first-child { color: #888; flex-shrink: 0; }
+  #detail .d-row span:last-child { text-align: right; word-break: break-word; }
+  #d-rels-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+                  letter-spacing: .05em; color: #888; margin: 10px 0 4px; }
+  .d-rel { display: flex; align-items: baseline; gap: 6px; padding: 2px 4px; border-radius: 3px;
+           cursor: pointer; line-height: 1.3; }
+  .d-rel:hover { background: #e9ecef; }
+  .d-rel .phrase { font-size: 0.72rem; white-space: nowrap; flex-shrink: 0; min-width: 88px; }
+  .d-rel .target { word-break: break-word; }
+  .d-rel.hidden-node .target { color: #adb5bd; font-style: italic; }
 
   /* ── overlay badge while loading ── */
   #loading-overlay {
-    position: absolute; inset: 0; background: rgba(248,249,250,.85);
+    position: absolute; inset: 0; background: rgba(248,249,250,.9);
     display: flex; align-items: center; justify-content: center;
     font-size: 1rem; color: #555; z-index: 20;
   }
 
   /* ── sidebar elements ── */
   .sidebar-section { margin-bottom: 12px; }
-  .sidebar-section label.section-title {
+  .sidebar-section .section-title {
     font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
     letter-spacing: .05em; color: #888; display: block; margin-bottom: 5px;
   }
@@ -53,14 +65,20 @@
     font-size: 0.75rem; border: 1px solid; transition: opacity .15s;
     white-space: nowrap; user-select: none;
   }
-  .chip.off { opacity: .3; }
+  .chip.off { opacity: .4; text-decoration: line-through; background: transparent !important; }
+  .result-row { padding: 2px 4px; cursor: pointer; font-size: 0.78rem; border-radius: 3px;
+                display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+  .result-row:hover { background: #e9ecef; }
+  .result-row .muted { color: #aaa; font-size: 0.72em; white-space: nowrap; }
 
   /* category dot */
-  .cat-dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:4px; }
+  .cat-dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:4px; flex-shrink: 0; }
 
   /* stat bar */
   #stat-bar { font-size: 0.75rem; color: #6c757d; padding: 3px 8px;
-              border-top: 1px solid #dee2e6; background: #fff; }
+              border-top: 1px solid #dee2e6; background: #fff;
+              display: flex; justify-content: space-between; gap: 12px; }
+  #stat-snap { white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -73,7 +91,7 @@
   </a>
   <span class="text-light" style="font-size:0.82rem">Relations Graph</span>
   <div class="d-flex gap-2">
-    <button id="btn-physics" class="btn btn-sm btn-outline-light">Physics ON</button>
+    <button id="btn-physics" class="btn btn-sm btn-outline-light" title="Let the layout move again (it is frozen after loading)">Physics OFF</button>
     <button id="btn-fit"     class="btn btn-sm btn-outline-light">Fit view</button>
   </div>
 </nav>
@@ -81,45 +99,56 @@
 <div id="main">
 
   <!-- Sidebar -->
-  <div id="sidebar">
+  <div id="sidebar" class="busy">
 
     <!-- Search -->
     <div class="sidebar-section">
-      <label class="section-title">Search node</label>
+      <label class="section-title" for="search-box">Search item</label>
       <input id="search-box" type="text" class="form-control form-control-sm"
-             placeholder="Label or ID…">
-      <div id="search-results" style="margin-top:4px; max-height:120px; overflow-y:auto;"></div>
+             placeholder="Label or ID…" autocomplete="off">
+      <div id="search-results" style="margin-top:4px; max-height:160px; overflow-y:auto;"></div>
+    </div>
+
+    <!-- Click behaviour -->
+    <div class="sidebar-section">
+      <span class="section-title">On click, highlight</span>
+      <div class="btn-group btn-group-sm w-100" role="group">
+        <input type="radio" class="btn-check" name="click-mode" id="mode-nb" value="neighbours" checked>
+        <label class="btn btn-outline-secondary" for="mode-nb">Neighbours</label>
+        <input type="radio" class="btn-check" name="click-mode" id="mode-comp" value="component">
+        <label class="btn btn-outline-secondary" for="mode-comp">Whole group</label>
+      </div>
     </div>
 
     <!-- Min-degree -->
     <div class="sidebar-section">
-      <label class="section-title">Min degree: <span id="deg-val">0</span></label>
+      <label class="section-title" for="deg-slider">Min relations: <span id="deg-val">1</span></label>
       <input id="deg-slider" type="range" class="form-range" min="0" max="20" value="1">
     </div>
 
     <!-- Categories -->
     <div class="sidebar-section">
-      <label class="section-title">Categories</label>
+      <span class="section-title">Categories</span>
       <div class="chip-list" id="cat-chips"></div>
     </div>
 
     <!-- Relations -->
     <div class="sidebar-section">
-      <label class="section-title">Relations</label>
+      <span class="section-title">Relations</span>
       <div class="chip-list" id="rel-chips"></div>
     </div>
 
     <!-- Keyword highlight -->
     <div class="sidebar-section">
-      <label class="section-title">Highlight keyword</label>
+      <label class="section-title" for="kw-search">Highlight keyword</label>
       <input id="kw-search" type="text" class="form-control form-control-sm"
-             placeholder="Type keyword…">
+             placeholder="Type keyword…" autocomplete="off">
       <div id="kw-results" style="margin-top:4px; max-height:140px; overflow-y:auto;"></div>
     </div>
 
     <!-- Source highlight -->
     <div class="sidebar-section">
-      <label class="section-title">Highlight source</label>
+      <label class="section-title" for="src-highlight">Highlight source</label>
       <select id="src-highlight" class="form-select form-select-sm">
         <option value="">— All sources —</option>
       </select>
@@ -127,7 +156,7 @@
 
     <!-- Legend -->
     <div class="sidebar-section">
-      <label class="section-title">Legend</label>
+      <span class="section-title">Legend</span>
       <div id="legend" style="font-size:0.78rem; line-height:1.8;"></div>
     </div>
   </div>
@@ -138,33 +167,30 @@
     <div id="graph"></div>
     <!-- Detail panel -->
     <div id="detail">
-      <h6>Node detail</h6>
-      <a class="d-label" id="d-label" href="#" target="_blank" rel="noopener noreferrer"></a>
-      <div class="d-row"><span>ID</span>       <span id="d-id"></span></div>
-      <div class="d-row"><span>Category</span> <span id="d-cat"></span></div>
-      <div class="d-row"><span>Source</span>   <span id="d-src"></span></div>
-      <div class="d-row"><span>Degree</span>   <span id="d-deg"></span></div>
+      <div class="d-head">
+        <a class="d-label" id="d-label" href="#" target="_blank" rel="noopener noreferrer"></a>
+        <button type="button" class="btn-close" id="d-close" aria-label="Close"></button>
+      </div>
+      <div class="d-row"><span>ID</span>        <span id="d-id"></span></div>
+      <div class="d-row"><span>Category</span>  <span id="d-cat"></span></div>
+      <div class="d-row"><span>Source</span>    <span id="d-src"></span></div>
+      <div class="d-row"><span>Relations</span> <span id="d-deg"></span></div>
       <div class="d-row" style="margin-top:4px">
         <span>URL</span>
         <a id="d-url" href="#" target="_blank" rel="noopener noreferrer"
-           style="font-size:0.72em;word-break:break-all;text-align:right;max-width:160px;color:#0d6efd">—</a>
+           style="font-size:0.72em;word-break:break-all;text-align:right;max-width:190px;color:#0d6efd">—</a>
       </div>
+      <div id="d-rels-title"></div>
+      <div id="d-rels"></div>
     </div>
   </div>
 
 </div><!-- /main -->
 
-<div id="stat-bar">Loading…</div>
+<div id="stat-bar"><span id="stat-text">Loading…</span><span id="stat-snap"></span></div>
 </div><!-- /app -->
 
 <script>
-/* ── utils ────────────────────────────────────────────────────── */
-function esc(s) {
-  return String(s == null ? '' : s)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
-}
-
 /* ── colour maps ──────────────────────────────────────────────── */
 const CAT_COLOR = {
   'tool-or-service':  '#1000ff',
@@ -174,15 +200,6 @@ const CAT_COLOR = {
   'workflow':         '#8b00e6',
 };
 const CAT_DEFAULT = '#999';
-
-const REL_COLOR = {
-  'relates-to': '#aaaaaa',
-  'mentions':   '#0d6efd',
-  'documents':  '#198754',
-  'extends':    '#fd7e14',
-};
-const REL_DEFAULT = '#ccc';
-
 const CAT_LABEL = {
   'tool-or-service':   'Tool / Service',
   'dataset':           'Dataset',
@@ -191,326 +208,421 @@ const CAT_LABEL = {
   'workflow':          'Workflow',
 };
 
+const REL_COLOR = {
+  'relates-to': '#adb5bd',
+  'mentions':   '#0d6efd',
+  'documents':  '#198754',
+  'extends':    '#fd7e14',
+};
+const REL_DEFAULT = '#ccc';
+// The edge grey is deliberately light; the chip needs a darker tone to not look switched off.
+const REL_CHIP_COLOR = { 'relates-to': '#6c757d' };
 const REL_LABEL = {
   'relates-to': 'Relates to',
   'mentions':   'Mentions',
   'documents':  'Documents',
   'extends':    'Extends',
 };
+// Relations with a direction get an arrowhead (from → to); "relates to" is undirected.
+const DIRECTED = new Set(['mentions', 'documents', 'extends']);
+// How a relation reads from the 'from' item and from the 'to' item.
+const REL_PHRASE = {
+  'relates-to': ['Related to', 'Related to'],
+  'mentions':   ['Mentions',   'Mentioned in'],
+  'documents':  ['Documents',  'Documented by'],
+  'extends':    ['Extends',    'Extended by'],
+};
+
+const NODE_HL  = { background: '#ffe082', border: '#f57c00' };
+const DIM_NODE = { background: '#e9ecef', border: '#dee2e6' };
+const DIM_EDGE = '#eceff1';
+
+/* ── initial layout ───────────────────────────────────────────── */
+// Computed once in the browser for the items that have relations, then frozen,
+// so filters only show/hide items and never reshuffle the map.
+const LAYOUT_OPTIONS = {
+  layout: { randomSeed: 7, improvedLayout: false },
+  physics: {
+    enabled: true,
+    solver: 'forceAtlas2Based',
+    forceAtlas2Based: { gravitationalConstant: -40, centralGravity: 0.012,
+                        springLength: 60, springConstant: 0.08, damping: 0.5, avoidOverlap: 0 },
+    stabilization: { enabled: true, iterations: 300, updateInterval: 20, fit: true },
+  },
+};
+const LAYOUT_STORE_PREFIX = 'sshompitor-graph-layout-v1-';
 
 /* ── state ────────────────────────────────────────────────────── */
 let allNodes = [], allEdges = [];
+const nodeById  = new Map();
+const relsByNode = new Map();   // id → [{ e, other, out }] over all edges
+let keywordIndex = {};          // keyword → Set of node IDs
 let network, nodesDS, edgesDS;
 let activeCats = new Set();
 let activeRels = new Set();
-let minDegree  = 0;
-let highlightActive    = false;
-let activeSourceFilter = null;
-let keywordIndex       = {};  // keyword → Set of node IDs (built after data loads)
+let minDegree  = 1;
+let clickMode  = 'neighbours';
+let hl         = null;          // {type:'node', id} | {type:'source', value} | {type:'keyword', value}
+let painted    = false;         // true while nodes/edges carry highlight colours
+let layoutDone = false;
+const posCache = {};            // id → {x, y}; keeps the map stable across filter changes
+let isolatedBox = null;         // where items without relations are laid out
 
 /* ── helpers ──────────────────────────────────────────────────── */
+const $ = id => document.getElementById(id);
+function el(tag, props, text) {
+  const e = document.createElement(tag);
+  if (props) Object.assign(e, props);
+  if (text != null) e.textContent = text;
+  return e;
+}
+function catDot(cat) {
+  const d = el('span', { className: 'cat-dot' });
+  d.style.background = CAT_COLOR[cat] || CAT_DEFAULT;
+  return d;
+}
+function trunc(s, n) { return s.length > n ? s.slice(0, n - 1) + '…' : s; }
 function nodeSize(deg) { return Math.max(6, Math.min(30, 6 + deg * 1.5)); }
 
+// The most connected items are "landmarks": their labels keep a readable on-screen
+// size at any zoom, so the zoomed-out overview still shows where things are.
+const LANDMARK_COUNT = 25, LANDMARK_PX = 12;
+const landmarks = new Set();
+let viewScale = 1;
+function nodeFont(n, dimmed) {
+  const color = dimmed ? '#ced4da' : '#333';
+  if (!landmarks.has(n.id)) return { size: 10, color };
+  return { size: Math.max(10, LANDMARK_PX / viewScale), color,
+           strokeWidth: dimmed ? 0 : 3, strokeColor: '#ffffff' };
+}
+function refreshLandmarkFonts() {
+  viewScale = network.getScale();
+  const upd = [];
+  landmarks.forEach(id => {
+    const cur = nodesDS.get(id);
+    if (cur) upd.push({ id, font: nodeFont(nodeById.get(id), cur.font.color === '#ced4da') });
+  });
+  if (upd.length) nodesDS.update(upd);
+}
+function edgeId(e) { return e.from + '|' + e.to + '|' + e.code; }
+function mpUrl(n) { return 'https://marketplace.sshopencloud.eu/' + n.category + '/' + n.id; }
+
+function nodeColor(n) {
+  const c = CAT_COLOR[n.category] || CAT_DEFAULT;
+  return { background: c, border: '#333', highlight: NODE_HL, hover: { background: c, border: '#000' } };
+}
+
 function visNode(n) {
-  return {
+  const v = {
     id:    n.id,
-    label: n.label.length > 30 ? n.label.slice(0, 28) + '…' : n.label,
-    title: n.label + '\n' + (CAT_LABEL[n.category] || n.category) + ' · degree ' + n.degree,
-    color: { background: CAT_COLOR[n.category] || CAT_DEFAULT,
-             border:     '#333',
-             highlight:  { background: '#ffe082', border: '#f57c00' } },
+    label: trunc(n.label, 30),
+    title: n.label + '\n' + (CAT_LABEL[n.category] || n.category) + ' · '
+           + n.degree + (n.degree === 1 ? ' relation' : ' relations'),
+    color: nodeColor(n),
     size:  nodeSize(n.degree),
     shape: 'dot',
-    font:  { size: 10, color: '#333' },
-    _raw:  n,
+    font:  nodeFont(n, false),
   };
+  const p = posCache[n.id];
+  if (p) { v.x = p.x; v.y = p.y; }
+  if (n.degree === 0) v.physics = false;   // isolated items sit in a fixed grid
+  return v;
 }
 
 function visEdge(e) {
   const col = REL_COLOR[e.code] || REL_DEFAULT;
   return {
-    id:    e.from + '|' + e.to + '|' + e.code,
-    from:  e.from,
-    to:    e.to,
-    title: e.label,
-    color: { color: col, highlight: col, hover: col },
-    width: 1,
-    arrows: { to: { enabled: true, scaleFactor: 0.4 }, from: { enabled: true, scaleFactor: 0.4 } },
-    _code: e.code,
+    id:     edgeId(e),
+    from:   e.from,
+    to:     e.to,
+    title:  e.label,
+    color:  { color: col, highlight: col, hover: col },
+    width:  1,
+    arrows: { to: { enabled: DIRECTED.has(e.code), scaleFactor: 0.5 } },
+    _code:  e.code,
   };
+}
+
+/* ── items without relations: fixed grid below the map ────────── */
+function placeIsolated() {
+  let minX = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of Object.values(posCache)) {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+  if (!isFinite(minX)) { minX = 0; maxX = 1500; maxY = 0; }
+  const iso = allNodes.filter(n => n.degree === 0).sort((a, b) =>
+    a.category.localeCompare(b.category) || a.label.localeCompare(b.label));
+  const gap  = 30;
+  const cols = Math.max(20, Math.floor((maxX - minX) / gap));
+  const top  = maxY + 400;
+  let row = -1, col = cols, cat = null;
+  for (const n of iso) {
+    if (n.category !== cat) { cat = n.category; row += (row < 0 ? 1 : 3); col = 0; }  // new category: new block
+    else if (col >= cols)   { col = 0; row += 1; }
+    posCache[n.id] = { x: minX + col * gap, y: top + row * gap };
+    col += 1;
+  }
+  isolatedBox = { x: minX, y: top, count: iso.length };
 }
 
 /* ── build filtered dataset ───────────────────────────────────── */
 function applyFilters() {
-  highlightActive = false;   // dataset is rebuilt, any highlight is gone
-  const visibleNodes = allNodes.filter(n =>
-    n.degree >= minDegree &&
-    activeCats.has(n.category)
-  );
+  if (layoutDone) Object.assign(posCache, network.getPositions());
+  const visibleNodes = allNodes.filter(n => n.degree >= minDegree && activeCats.has(n.category));
+  if (layoutDone && minDegree === 0 && !isolatedBox) placeIsolated();
   const visibleIds = new Set(visibleNodes.map(n => n.id));
-
   const visibleEdges = allEdges.filter(e =>
-    activeRels.has(e.code) &&
-    visibleIds.has(e.from) &&
-    visibleIds.has(e.to)
-  );
+    activeRels.has(e.code) && visibleIds.has(e.from) && visibleIds.has(e.to));
 
   nodesDS.clear();
   edgesDS.clear();
   nodesDS.add(visibleNodes.map(visNode));
   edgesDS.add(visibleEdges.map(visEdge));
+  painted = false;
 
-  updateStatBar(visibleNodes.length, visibleEdges.length);
+  // Keep any active highlight in sync with what is now visible
+  if (hl && hl.type === 'node' && !visibleIds.has(hl.id)) clearHighlight();
+  else renderHighlight();
 }
 
-/* ── highlight connected component (BFS, any degree) ─────────── */
-function highlightComponent(nodeId) {
-  // Build adjacency from currently visible edges (undirected traversal)
-  const adj = {};
-  edgesDS.get().forEach(e => {
-    (adj[e.from] = adj[e.from] || []).push({ nb: e.to,   eid: e.id });
-    (adj[e.to]   = adj[e.to]   || []).push({ nb: e.from, eid: e.id });
-  });
-
-  // BFS
-  const visitedNodes = new Set([nodeId]);
-  const visitedEdges = new Set();
-  const queue = [nodeId];
-  while (queue.length) {
-    const cur = queue.shift();
-    for (const { nb, eid } of (adj[cur] || [])) {
-      visitedEdges.add(eid);
-      if (!visitedNodes.has(nb)) { visitedNodes.add(nb); queue.push(nb); }
+/* ── highlighting ─────────────────────────────────────────────── */
+function highlightSets() {
+  if (!hl) return null;
+  const nodes = new Set(), edges = new Set();
+  const visEdges = edgesDS.get();
+  if (hl.type === 'node') {
+    nodes.add(hl.id);
+    if (clickMode === 'component') {
+      const adj = {};
+      visEdges.forEach(e => {
+        (adj[e.from] = adj[e.from] || []).push([e.to, e.id]);
+        (adj[e.to]   = adj[e.to]   || []).push([e.from, e.id]);
+      });
+      const queue = [hl.id];
+      while (queue.length) {
+        const cur = queue.shift();
+        for (const [nb, eid] of (adj[cur] || [])) {
+          edges.add(eid);
+          if (!nodes.has(nb)) { nodes.add(nb); queue.push(nb); }
+        }
+      }
+    } else {
+      visEdges.forEach(e => {
+        if (e.from === hl.id || e.to === hl.id) {
+          edges.add(e.id);
+          nodes.add(e.from === hl.id ? e.to : e.from);
+        }
+      });
     }
+    return { nodes, edges };
   }
-
-  // Update node colours
-  const nodeUpdates = nodesDS.get().map(n => {
-    if (visitedNodes.has(n.id)) {
-      // restore normal colour (visNode already set it; just clear any dim override)
-      const raw = allNodes.find(r => r.id === n.id);
-      const col = raw ? (CAT_COLOR[raw.category] || CAT_DEFAULT) : CAT_DEFAULT;
-      return { id: n.id,
-               color: { background: col, border: '#333',
-                        highlight: { background: '#ffe082', border: '#f57c00' } },
-               font: { size: 10, color: '#333' },
-               opacity: 1 };
-    } else {
-      return { id: n.id,
-               color: { background: '#e0e0e0', border: '#ccc',
-                        highlight: { background: '#e0e0e0', border: '#ccc' } },
-               font: { size: 10, color: '#bbb' },
-               opacity: 0.25 };
-    }
-  });
-
-  // Update edge colours
-  const edgeUpdates = edgesDS.get().map(e => {
-    if (visitedEdges.has(e.id)) {
-      const col = REL_COLOR[e._code] || REL_DEFAULT;
-      return { id: e.id, color: { color: col, highlight: col, hover: col }, width: 1.5, opacity: 1 };
-    } else {
-      return { id: e.id, color: { color: '#e0e0e0', highlight: '#e0e0e0', hover: '#e0e0e0' }, width: 0.5, opacity: 0.15 };
-    }
-  });
-
-  nodesDS.update(nodeUpdates);
-  edgesDS.update(edgeUpdates);
-  highlightActive = true;
-
-  // update stat bar
-  const bar = document.getElementById('stat-bar');
-  bar.textContent = 'Component: ' + visitedNodes.size.toLocaleString()
-    + ' nodes · ' + visitedEdges.size.toLocaleString()
-    + ' edges  (click background to clear)';
+  // source / keyword: matching visible items, plus the edges among them
+  const match = hl.type === 'source'
+    ? (id => nodeById.get(id).source === hl.value)
+    : (id => (keywordIndex[hl.value] || new Set()).has(id));
+  nodesDS.getIds().forEach(id => { if (match(id)) nodes.add(id); });
+  visEdges.forEach(e => { if (nodes.has(e.from) && nodes.has(e.to)) edges.add(e.id); });
+  return { nodes, edges };
 }
 
-/* ── highlight all nodes sharing a keyword ────────────────────── */
-function highlightByKeyword(keyword) {
-  highlightActive    = true;
-  activeSourceFilter = null;
-  document.getElementById('src-highlight').value = '';
-  const matchIds = keywordIndex[keyword] || new Set();
-  const rawMap   = Object.fromEntries(allNodes.map(n => [n.id, n]));
-
-  nodesDS.update(nodesDS.get().map(n => {
-    if (matchIds.has(n.id)) {
-      const col = CAT_COLOR[rawMap[n.id].category] || CAT_DEFAULT;
-      return { id: n.id,
-               color: { background: col, border: '#333',
-                        highlight: { background: '#ffe082', border: '#f57c00' } },
-               font: { size: 10, color: '#333' }, opacity: 1 };
-    }
-    return { id: n.id,
-             color: { background: '#e0e0e0', border: '#ccc',
-                      highlight: { background: '#e0e0e0', border: '#ccc' } },
-             font: { size: 10, color: '#bbb' }, opacity: 0.15 };
-  }));
-
-  edgesDS.update(edgesDS.get().map(e => {
-    if (matchIds.has(e.from) && matchIds.has(e.to)) {
-      const col = REL_COLOR[e._code] || REL_DEFAULT;
-      return { id: e.id, color: { color: col, highlight: col, hover: col }, width: 1.5, opacity: 1 };
-    }
-    return { id: e.id,
-             color: { color: '#e0e0e0', highlight: '#e0e0e0', hover: '#e0e0e0' },
-             width: 0.5, opacity: 0.12 };
-  }));
-
-  document.getElementById('stat-bar').textContent =
-    'Keyword "' + keyword + '": ' + matchIds.size.toLocaleString()
-    + ' nodes highlighted  (click background to clear)';
+function renderHighlight() {
+  const sets = highlightSets();
+  if (sets || painted) {
+    const focusId = hl && hl.type === 'node' ? hl.id : null;
+    nodesDS.update(nodesDS.getIds().map(id => {
+      const n = nodeById.get(id);
+      if (!sets || sets.nodes.has(id)) {
+        return { id, color: nodeColor(n), borderWidth: id === focusId ? 3 : 1, font: nodeFont(n, false) };
+      }
+      return { id, borderWidth: 1,
+               color: { background: DIM_NODE.background, border: DIM_NODE.border,
+                        highlight: DIM_NODE, hover: DIM_NODE },
+               font: nodeFont(n, true) };
+    }));
+    edgesDS.update(edgesDS.get().map(e => {
+      if (!sets || sets.edges.has(e.id)) {
+        const col = REL_COLOR[e._code] || REL_DEFAULT;
+        return { id: e.id, color: { color: col, highlight: col, hover: col }, width: sets ? 2 : 1 };
+      }
+      return { id: e.id, color: { color: DIM_EDGE, highlight: DIM_EDGE, hover: DIM_EDGE }, width: 0.5 };
+    }));
+    painted = !!sets;
+  }
+  updateStatBar(sets);
 }
 
-/* ── highlight all nodes from one source ──────────────────────── */
-function highlightBySource(source) {
-  activeSourceFilter = source;
-  highlightActive    = true;
-  const rawMap = Object.fromEntries(allNodes.map(n => [n.id, n]));
-
-  nodesDS.update(nodesDS.get().map(n => {
-    const raw     = rawMap[n.id];
-    const matches = raw && raw.source === source;
-    if (matches) {
-      const col = CAT_COLOR[raw.category] || CAT_DEFAULT;
-      return { id: n.id,
-               color: { background: col, border: '#333',
-                        highlight: { background: '#ffe082', border: '#f57c00' } },
-               font:  { size: 10, color: '#333' },
-               opacity: 1 };
-    }
-    return { id: n.id,
-             color: { background: '#e0e0e0', border: '#ccc',
-                      highlight: { background: '#e0e0e0', border: '#ccc' } },
-             font:  { size: 10, color: '#bbb' },
-             opacity: 0.15 };
-  }));
-
-  edgesDS.update(edgesDS.get().map(e => {
-    const fr = rawMap[e.from], to = rawMap[e.to];
-    if (fr && to && fr.source === source && to.source === source) {
-      const col = REL_COLOR[e._code] || REL_DEFAULT;
-      return { id: e.id, color: { color: col, highlight: col, hover: col }, width: 1.5, opacity: 1 };
-    }
-    return { id: e.id,
-             color: { color: '#e0e0e0', highlight: '#e0e0e0', hover: '#e0e0e0' },
-             width: 0.5, opacity: 0.12 };
-  }));
-
-  const count = allNodes.filter(n => n.source === source).length;
-  document.getElementById('stat-bar').textContent =
-    'Source "' + source + '": ' + count.toLocaleString()
-    + ' nodes highlighted  (click background to clear)';
+function resetHighlightInputs() {
+  $('src-highlight').value = '';
+  $('kw-search').value = '';
+  $('kw-results').replaceChildren();
 }
 
 function clearHighlight() {
-  if (!highlightActive) return;
-  highlightActive    = false;
-  activeSourceFilter = null;
-  document.getElementById('src-highlight').value = '';
-  document.getElementById('kw-search').value     = '';
-  document.getElementById('kw-results').innerHTML = '';
-  // Restore all nodes/edges to their normal visNode/visEdge appearance
-  const rawMap = Object.fromEntries(allNodes.map(n => [n.id, n]));
-  nodesDS.update(nodesDS.get().map(n => {
-    const raw = rawMap[n.id];
-    if (!raw) return { id: n.id };
-    const col = CAT_COLOR[raw.category] || CAT_DEFAULT;
-    return { id: n.id,
-             color: { background: col, border: '#333',
-                      highlight: { background: '#ffe082', border: '#f57c00' } },
-             font: { size: 10, color: '#333' },
-             opacity: 1 };
-  }));
-  edgesDS.update(edgesDS.get().map(e => {
-    const col = REL_COLOR[e._code] || REL_DEFAULT;
-    return { id: e.id, color: { color: col, highlight: col, hover: col }, width: 1, opacity: 1 };
-  }));
-  // restore stat bar
-  updateStatBar(nodesDS.length, edgesDS.length);
+  hl = null;
+  resetHighlightInputs();
+  $('detail').style.display = 'none';
+  if (network) network.unselectAll();
+  renderHighlight();
 }
 
-function updateStatBar(n, e) {
-  document.getElementById('stat-bar').textContent =
-    'Showing ' + n.toLocaleString() + ' nodes · ' + e.toLocaleString() + ' edges' +
-    '   (total: ' + allNodes.length.toLocaleString() + ' nodes, ' + allEdges.length.toLocaleString() + ' edges)';
+/* Make sure an item is on the canvas: switch its category back on and lower
+   the min-relations filter if needed. */
+function revealNode(n) {
+  let changed = false;
+  if (!activeCats.has(n.category)) {
+    activeCats.add(n.category);
+    const chip = document.querySelector('#cat-chips .chip[data-cat="' + CSS.escape(n.category) + '"]');
+    if (chip) chip.classList.remove('off');
+    changed = true;
+  }
+  if (n.degree < minDegree) {
+    minDegree = n.degree;
+    $('deg-slider').value = minDegree;
+    $('deg-val').textContent = minDegree;
+    changed = true;
+  }
+  if (changed) applyFilters();
+}
+
+function selectNode(id, focus) {
+  const n = nodeById.get(id);
+  if (!n) return;
+  revealNode(n);
+  hl = { type: 'node', id };
+  resetHighlightInputs();
+  renderHighlight();
+  network.selectNodes([id]);
+  if (focus) network.focus(id, { scale: Math.max(network.getScale(), 1.0), animation: { duration: 400 } });
+  showDetail(id);
+}
+
+function updateStatBar(sets) {
+  let txt = 'Showing ' + nodesDS.length.toLocaleString() + ' of ' + allNodes.length.toLocaleString()
+          + ' items · ' + edgesDS.length.toLocaleString() + ' of ' + allEdges.length.toLocaleString() + ' relations';
+  if (sets && hl) {
+    let what;
+    if (hl.type === 'node') {
+      what = (clickMode === 'component' ? 'Connected group of "' : 'Neighbours of "')
+           + trunc(nodeById.get(hl.id).label, 40) + '"';
+    } else {
+      what = (hl.type === 'source' ? 'Source "' : 'Keyword "') + hl.value + '"';
+    }
+    txt += '   —   ' + what + ': ' + sets.nodes.size.toLocaleString()
+         + ' items highlighted (click background or press Esc to clear)';
+  }
+  $('stat-text').textContent = txt;
 }
 
 /* ── detail panel ─────────────────────────────────────────────── */
 function showDetail(nodeId) {
-  const raw = allNodes.find(n => n.id === nodeId);
+  const raw = nodeById.get(nodeId);
   if (!raw) return;
-  const url = 'https://marketplace.sshopencloud.eu/' + raw.category + '/' + raw.id;
-  const labelEl = document.getElementById('d-label');
-  labelEl.textContent = raw.label;
-  labelEl.href        = url;
-  document.getElementById('d-id').textContent    = raw.id;
-  document.getElementById('d-cat').textContent   = CAT_LABEL[raw.category] || raw.category;
-  document.getElementById('d-src').textContent   = raw.source || '—';
-  document.getElementById('d-deg').textContent   = raw.degree;
-  const urlEl = document.getElementById('d-url');
-  urlEl.textContent = url;
-  urlEl.href        = url;
-  document.getElementById('detail').style.display = '';
+  const url = mpUrl(raw);
+  $('d-label').textContent = raw.label;
+  $('d-label').href        = url;
+  $('d-id').textContent    = raw.id;
+  $('d-cat').textContent   = CAT_LABEL[raw.category] || raw.category;
+  $('d-src').textContent   = raw.source || '—';
+  $('d-deg').textContent   = raw.degree;
+  $('d-url').textContent   = url;
+  $('d-url').href          = url;
+
+  const rels = (relsByNode.get(nodeId) || []).map(r => {
+    const phrases = REL_PHRASE[r.e.code];
+    const phrase  = phrases ? phrases[r.out ? 0 : 1] : (REL_LABEL[r.e.code] || r.e.code);
+    return { phrase, code: r.e.code, other: nodeById.get(r.other) };
+  }).filter(r => r.other)
+    .sort((a, b) => a.phrase.localeCompare(b.phrase) || a.other.label.localeCompare(b.other.label));
+
+  $('d-rels-title').textContent = rels.length ? 'Relations (' + rels.length + ')' : 'No relations';
+  const list = $('d-rels');
+  list.replaceChildren();
+  rels.forEach(r => {
+    const onCanvas = nodesDS.get(r.other.id) !== null;
+    const row = el('div', { className: 'd-rel' + (onCanvas ? '' : ' hidden-node'),
+                            title: onCanvas ? 'Go to this item' : 'Hidden by current filters — click to show' });
+    const phrase = el('span', { className: 'phrase' }, r.phrase);
+    phrase.style.color = REL_CHIP_COLOR[r.code] || REL_COLOR[r.code] || '#555';
+    const target = el('span', { className: 'target' });
+    target.append(catDot(r.other.category), document.createTextNode(r.other.label));
+    row.append(phrase, target);
+    row.onclick = () => selectNode(r.other.id, true);
+    list.appendChild(row);
+  });
+  $('detail').style.display = 'block';
+  $('detail').scrollTop = 0;
 }
 
-/* ── search ───────────────────────────────────────────────────── */
-document.getElementById('search-box').addEventListener('input', function() {
+/* ── result list rows (search + keyword) ──────────────────────── */
+function resultRow(left, right, onclick) {
+  const d = el('div', { className: 'result-row' });
+  const l = el('span');
+  l.style.cssText = 'display:flex;align-items:center;min-width:0';
+  l.append(...left);
+  d.append(l);
+  if (right != null) d.append(el('span', { className: 'muted' }, right));
+  d.onclick = onclick;
+  return d;
+}
+
+$('search-box').addEventListener('input', function() {
   const q = this.value.trim().toLowerCase();
-  const box = document.getElementById('search-results');
-  box.innerHTML = '';
+  const box = $('search-results');
+  box.replaceChildren();
   if (!q) return;
-  const hits = allNodes.filter(n =>
-    n.label.toLowerCase().includes(q) || n.id.toLowerCase().includes(q)
-  ).slice(0, 8);
-  hits.forEach(n => {
-    const d = document.createElement('div');
-    d.style.cssText = 'padding:2px 4px;cursor:pointer;font-size:0.78rem;border-radius:3px';
-    d.onmouseenter = () => d.style.background = '#e9ecef';
-    d.onmouseleave = () => d.style.background = '';
-    d.innerHTML = '<span class="cat-dot" style="background:' + (CAT_COLOR[n.category]||CAT_DEFAULT) + '"></span>'
-                + n.label.slice(0, 38) + (n.label.length > 38 ? '…' : '');
-    d.onclick = () => {
-      network.focus(n.id, { scale: 1.2, animation: { duration: 400 } });
-      network.selectNodes([n.id]);
-      highlightComponent(n.id);
-      showDetail(n.id);
-      box.innerHTML = '';
-      document.getElementById('search-box').value = '';
-    };
-    box.appendChild(d);
-  });
+  allNodes.filter(n => n.label.toLowerCase().includes(q) || n.id.toLowerCase().includes(q))
+    .slice(0, 10)
+    .forEach(n => {
+      const label = el('span', null, trunc(n.label, 34));
+      label.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      box.appendChild(resultRow([catDot(n.category), label], n.degree ? null : 'no relations', () => {
+        box.replaceChildren();
+        $('search-box').value = '';
+        selectNode(n.id, true);
+      }));
+    });
 });
 
 /* ── main init ────────────────────────────────────────────────── */
 fetch('graph.json')
-  .then(r => r.json())
+  .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
   .then(data => {
     allNodes = data.nodes;
     allEdges = data.edges;
+    allNodes.forEach(n => nodeById.set(n.id, n));
+    allEdges.forEach(e => {
+      if (!relsByNode.has(e.from)) relsByNode.set(e.from, []);
+      if (!relsByNode.has(e.to))   relsByNode.set(e.to, []);
+      relsByNode.get(e.from).push({ e, other: e.to,   out: true  });
+      relsByNode.get(e.to).push({   e, other: e.from, out: false });
+    });
+
+    const ts = data.meta && data.meta.snapshot_ts;
+    if (ts) {
+      $('stat-snap').textContent = 'Snapshot: ' + new Date(ts * 1000).toLocaleDateString('en-GB',
+        { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+    }
 
     // collect unique categories / relations
     const cats = [...new Set(allNodes.map(n => n.category))].sort();
     const rels = [...new Set(allEdges.map(e => e.code))].sort();
-
     cats.forEach(c => activeCats.add(c));
     rels.forEach(r => activeRels.add(r));
 
     // ── Category chips
-    const catWrap = document.getElementById('cat-chips');
+    const catWrap = $('cat-chips');
     cats.forEach(c => {
       const col = CAT_COLOR[c] || CAT_DEFAULT;
-      const chip = document.createElement('span');
-      chip.className = 'chip';
-      chip.style.background = col + '22';
+      const chip = el('span', { className: 'chip' });
+      chip.style.background  = col + '22';
       chip.style.borderColor = col;
-      chip.style.color = col === '#ebdc00' ? '#555' : col;
-      chip.innerHTML = '<span class="cat-dot" style="background:' + col + '"></span>'
-                     + (CAT_LABEL[c] || c);
+      chip.style.color       = col === '#ebdc00' ? '#555' : col;
+      chip.append(catDot(c), document.createTextNode(CAT_LABEL[c] || c));
       chip.dataset.cat = c;
       chip.onclick = () => {
-        if (activeCats.has(c)) activeCats.delete(c);
-        else activeCats.add(c);
+        if (activeCats.has(c)) activeCats.delete(c); else activeCats.add(c);
         chip.classList.toggle('off', !activeCats.has(c));
         applyFilters();
       };
@@ -518,19 +630,16 @@ fetch('graph.json')
     });
 
     // ── Relation chips
-    const relWrap = document.getElementById('rel-chips');
+    const relWrap = $('rel-chips');
     rels.forEach(r => {
-      const col = REL_COLOR[r] || REL_DEFAULT;
-      const chip = document.createElement('span');
-      chip.className = 'chip';
-      chip.style.background = col + '22';
+      const col = REL_CHIP_COLOR[r] || REL_COLOR[r] || REL_DEFAULT;
+      const chip = el('span', { className: 'chip' }, REL_LABEL[r] || r);
+      chip.style.background  = col + '22';
       chip.style.borderColor = col;
-      chip.style.color = col;
-      chip.textContent = REL_LABEL[r] || r;
+      chip.style.color       = col;
       chip.dataset.rel = r;
       chip.onclick = () => {
-        if (activeRels.has(r)) activeRels.delete(r);
-        else activeRels.add(r);
+        if (activeRels.has(r)) activeRels.delete(r); else activeRels.add(r);
         chip.classList.toggle('off', !activeRels.has(r));
         applyFilters();
       };
@@ -538,66 +647,28 @@ fetch('graph.json')
     });
 
     // ── Legend
-    const legendEl = document.getElementById('legend');
+    const legendEl = $('legend');
     cats.forEach(c => {
-      const col = CAT_COLOR[c] || CAT_DEFAULT;
-      legendEl.innerHTML += '<div><span class="cat-dot" style="background:' + col + '"></span>'
-        + (CAT_LABEL[c] || c) + '</div>';
+      const row = el('div');
+      row.append(catDot(c), document.createTextNode(CAT_LABEL[c] || c));
+      legendEl.appendChild(row);
     });
-    legendEl.innerHTML += '<div style="margin-top:6px; border-top:1px solid #eee; padding-top:4px"></div>';
+    legendEl.appendChild(el('div', { style: 'margin-top:6px; border-top:1px solid #eee; padding-top:4px' }));
     rels.forEach(r => {
       const col = REL_COLOR[r] || REL_DEFAULT;
-      legendEl.innerHTML += '<div><span style="display:inline-block;width:18px;height:2px;background:'
-        + col + ';vertical-align:middle;margin-right:5px;border-radius:2px"></span>'
-        + (REL_LABEL[r] || r) + '</div>';
-    });
-
-    // ── Vis datasets
-    nodesDS = new vis.DataSet();
-    edgesDS = new vis.DataSet();
-
-    const container = document.getElementById('graph');
-    network = new vis.Network(container, { nodes: nodesDS, edges: edgesDS }, {
-      physics: {
-        enabled: true,
-        stabilization: { iterations: 150, updateInterval: 25 },
-        barnesHut: { gravitationalConstant: -8000, centralGravity: 0.25,
-                     springLength: 120, springConstant: 0.04, damping: 0.09 },
-      },
-      interaction: {
-        hover: true,
-        tooltipDelay: 150,
-        hideEdgesOnDrag: true,
-      },
-      nodes: { borderWidth: 1 },
-      edges: { smooth: { type: 'continuous', roundness: 0.2 } },
-    });
-
-    applyFilters();
-
-    // remove loading overlay after stabilization
-    network.once('stabilizationIterationsDone', () => {
-      document.getElementById('loading-overlay').style.display = 'none';
-    });
-    // fallback: remove after 8 s
-    setTimeout(() => {
-      document.getElementById('loading-overlay').style.display = 'none';
-    }, 8000);
-
-    // click → highlight component + detail panel
-    network.on('click', params => {
-      if (params.nodes.length) {
-        const nodeId = params.nodes[0];
-        document.getElementById('src-highlight').value  = '';
-        document.getElementById('kw-search').value      = '';
-        document.getElementById('kw-results').innerHTML = '';
-        activeSourceFilter = null;
-        highlightComponent(nodeId);
-        showDetail(nodeId);
-      } else {
-        clearHighlight();
-        document.getElementById('detail').style.display = 'none';
+      const row = el('div');
+      const line = el('span');
+      line.style.cssText = 'display:inline-block;width:18px;height:2px;vertical-align:middle;'
+                         + 'margin-right:' + (DIRECTED.has(r) ? '0' : '5px') + ';border-radius:2px;background:' + col;
+      row.appendChild(line);
+      if (DIRECTED.has(r)) {   // CSS arrowhead (a ▶ glyph renders as an emoji on some systems)
+        const head = el('span');
+        head.style.cssText = 'display:inline-block;width:0;height:0;vertical-align:middle;margin-right:5px;'
+                           + 'border-top:4px solid transparent;border-bottom:4px solid transparent;border-left:7px solid ' + col;
+        row.appendChild(head);
       }
+      row.appendChild(document.createTextNode(REL_LABEL[r] || r));
+      legendEl.appendChild(row);
     });
 
     // ── keyword index
@@ -607,72 +678,157 @@ fetch('graph.json')
         keywordIndex[kw].add(n.id);
       });
     });
-    // keyword list sorted by popularity (most items first)
     const allKeywords = Object.entries(keywordIndex)
       .sort((a, b) => b[1].size - a[1].size)
       .map(([kw, s]) => ({ kw, count: s.size }));
 
-    document.getElementById('kw-search').addEventListener('input', function() {
+    $('kw-search').addEventListener('input', function() {
       const q   = this.value.trim().toLowerCase();
-      const box = document.getElementById('kw-results');
-      box.innerHTML = '';
+      const box = $('kw-results');
+      box.replaceChildren();
       if (!q) return;
       allKeywords.filter(({ kw }) => kw.toLowerCase().includes(q)).slice(0, 10).forEach(({ kw, count }) => {
-        const d = document.createElement('div');
-        d.style.cssText = 'padding:2px 6px;cursor:pointer;font-size:0.78rem;border-radius:3px;'
-                        + 'display:flex;justify-content:space-between;align-items:center';
-        d.onmouseenter = () => d.style.background = '#e9ecef';
-        d.onmouseleave = () => d.style.background = '';
-        d.innerHTML = '<span>' + esc(kw) + '</span>'
-                    + '<span style="color:#aaa;font-size:0.72em;margin-left:6px">' + count + '</span>';
-        d.onclick = () => {
-          highlightByKeyword(kw);
-          document.getElementById('kw-search').value = kw;
-          box.innerHTML = '';
-        };
-        box.appendChild(d);
+        box.appendChild(resultRow([el('span', null, kw)], String(count), () => {
+          hl = { type: 'keyword', value: kw };
+          $('src-highlight').value = '';
+          $('detail').style.display = 'none';
+          network.unselectAll();
+          renderHighlight();
+          $('kw-search').value = kw;
+          box.replaceChildren();
+        }));
       });
     });
 
     // ── source highlight dropdown
-    const srcHL = document.getElementById('src-highlight');
+    const srcHL = $('src-highlight');
     [...new Set(allNodes.map(n => n.source).filter(Boolean))].sort().forEach(s => {
-      const opt = document.createElement('option');
-      opt.value = s; opt.textContent = s;
-      srcHL.appendChild(opt);
+      srcHL.appendChild(el('option', { value: s }, s));
     });
     srcHL.addEventListener('change', function() {
-      document.getElementById('kw-search').value      = '';
-      document.getElementById('kw-results').innerHTML = '';
-      if (this.value) { highlightBySource(this.value); }
-      else            { clearHighlight(); }
+      if (!this.value) { clearHighlight(); return; }
+      hl = { type: 'source', value: this.value };
+      $('kw-search').value = '';
+      $('kw-results').replaceChildren();
+      $('detail').style.display = 'none';
+      network.unselectAll();
+      renderHighlight();
     });
 
+    // ── click mode
+    document.querySelectorAll('input[name="click-mode"]').forEach(r => r.addEventListener('change', () => {
+      clickMode = r.value;
+      if (hl && hl.type === 'node') renderHighlight();
+    }));
+
     // ── degree slider
-    const slider = document.getElementById('deg-slider');
-    slider.max = Math.max(...allNodes.map(n => n.degree));
+    const slider = $('deg-slider');
+    slider.max = Math.max(1, ...allNodes.map(n => n.degree));
     slider.addEventListener('input', () => {
       minDegree = +slider.value;
-      document.getElementById('deg-val').textContent = minDegree;
+      $('deg-val').textContent = minDegree;
       applyFilters();
     });
 
+    allNodes.filter(n => n.degree >= 5).sort((a, b) => b.degree - a.degree)
+      .slice(0, LANDMARK_COUNT).forEach(n => landmarks.add(n.id));
+
+    // ── Network: lay out the items that have relations, then freeze the layout
+    const initialNodes = allNodes.filter(n => n.degree >= minDegree);
+    const initialIds   = new Set(initialNodes.map(n => n.id));
+
+    // A finished layout is kept in this browser per snapshot, so repeat visits open instantly.
+    const layoutKey = LAYOUT_STORE_PREFIX + (ts || 'na') + '-' + initialNodes.length + '-' + allEdges.length;
+    let cached = null;
+    try { cached = JSON.parse(localStorage.getItem(layoutKey)); } catch (e) { /* storage unavailable */ }
+    if (cached && initialNodes.every(n => Array.isArray(cached[n.id]))) {
+      initialNodes.forEach(n => { posCache[n.id] = { x: cached[n.id][0], y: cached[n.id][1] }; });
+    } else {
+      cached = null;
+    }
+
+    nodesDS = new vis.DataSet(initialNodes.map(visNode));
+    edgesDS = new vis.DataSet(allEdges.filter(e => initialIds.has(e.from) && initialIds.has(e.to)).map(visEdge));
+    updateStatBar(null);
+
+    const options = Object.assign({
+      interaction: { hover: true, tooltipDelay: 150, hideEdgesOnDrag: true, hideEdgesOnZoom: true },
+      nodes: { borderWidth: 1 },
+      edges: { smooth: { type: 'continuous', roundness: 0.2 } },
+    }, LAYOUT_OPTIONS);
+    if (cached) options.physics = Object.assign({}, LAYOUT_OPTIONS.physics, { enabled: false });
+    network = new vis.Network($('graph'), { nodes: nodesDS, edges: edgesDS }, options);
+
+    function finishLayout(save) {
+      network.setOptions({ physics: { enabled: false } });
+      Object.assign(posCache, network.getPositions());
+      layoutDone = true;
+      network.fit();
+      refreshLandmarkFonts();
+      $('loading-overlay').style.display = 'none';
+      $('sidebar').classList.remove('busy');
+      if (!save) return;
+      try {
+        const out = {};
+        for (const [id, p] of Object.entries(network.getPositions())) out[id] = [Math.round(p.x), Math.round(p.y)];
+        Object.keys(localStorage).filter(k => k.startsWith(LAYOUT_STORE_PREFIX) && k !== layoutKey)
+          .forEach(k => localStorage.removeItem(k));
+        localStorage.setItem(layoutKey, JSON.stringify(out));
+      } catch (e) { /* storage unavailable or full: the next visit just lays out again */ }
+    }
+
+    if (cached) {
+      finishLayout(false);
+    } else {
+      network.on('stabilizationProgress', p => {
+        $('loading-overlay').textContent = 'Laying out graph… ' + Math.round(100 * p.iterations / p.total) + '%';
+      });
+      network.once('stabilizationIterationsDone', () => finishLayout(true));
+    }
+    // Keep landmark labels at their on-screen size through any zoom (wheel, fit, focus animations)
+    network.on('beforeDrawing', () => {
+      if (Math.abs(network.getScale() - viewScale) > 0.02 * viewScale) refreshLandmarkFonts();
+    });
+
+    // Heading above the grid of items without relations (constant on-screen size)
+    network.on('afterDrawing', ctx => {
+      if (!isolatedBox || minDegree > 0) return;
+      const s = network.getScale();
+      ctx.save();
+      ctx.font = '600 ' + (14 / s) + 'px system-ui, sans-serif';
+      ctx.fillStyle = '#6c757d';
+      ctx.fillText('Items without relations (' + isolatedBox.count.toLocaleString() + ')',
+                   isolatedBox.x - 10, isolatedBox.y - 24 / s);
+      ctx.restore();
+    });
+
+    // click → highlight + detail panel
+    network.on('click', params => {
+      if (params.nodes.length) selectNode(params.nodes[0], false);
+      else clearHighlight();
+    });
+
     // ── physics toggle
-    let physicsOn = true;
-    document.getElementById('btn-physics').addEventListener('click', () => {
+    let physicsOn = false;
+    $('btn-physics').addEventListener('click', () => {
       physicsOn = !physicsOn;
+      if (!physicsOn) Object.assign(posCache, network.getPositions());
       network.setOptions({ physics: { enabled: physicsOn } });
-      document.getElementById('btn-physics').textContent = physicsOn ? 'Physics ON' : 'Physics OFF';
+      $('btn-physics').textContent = physicsOn ? 'Physics ON' : 'Physics OFF';
     });
 
     // ── fit view
-    document.getElementById('btn-fit').addEventListener('click', () => {
+    $('btn-fit').addEventListener('click', () => {
       network.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } });
     });
 
+    $('d-close').addEventListener('click', clearHighlight);
+    document.addEventListener('keydown', ev => {
+      if (ev.key === 'Escape' && hl) clearHighlight();
+    });
   })
   .catch(err => {
-    document.getElementById('loading-overlay').textContent = 'Failed to load graph.json: ' + err.message;
+    $('loading-overlay').textContent = 'Failed to load graph.json: ' + err.message;
   });
 </script>
 </body>
